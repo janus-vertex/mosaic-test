@@ -19,7 +19,7 @@ class InputJobs:
     ):
         self.mode = "SINGLE_ROUND"
         self.allowCrossZoneGroup = False
-        self.enableAutoStore = False
+        self.enableAutoStore = True
         self.pickFromZoneGroups = [Parameters.ZONE_NAME]
         self.minLayer = min_layer
         self.maxLayer = max_layer
