@@ -123,6 +123,7 @@ class Simulator:
     def _set_delay(self) -> requests.Response:
         response = MosaicRequest.send_request(
             url=f"{self.SM_BASE}/v3/settings/auto-store",
+            method="PUT",
             data=self.simulation_preparation_ui.input_delay.to_json(type="dict"),
         )
         return response
