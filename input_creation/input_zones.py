@@ -4,11 +4,9 @@ import json
 from typing import List
 
 import numpy
-import pandas
 
-from ui.grid_designer import GridDesignerUI
-from ui.simulation_input import SimulationInputUI
 from core.parameters import Parameters
+from ui.grid_designer import GridDesignerUI
 
 
 class InputZonesAndStations:
@@ -26,15 +24,65 @@ class InputZonesAndStations:
             The grid designer UI.
         """
         # TODO: include voids for stacks less than z_size
-
-        # Voids are SM obstacles in simulation
-        void_mask = ~(
-            grid_designer_ui.grid_data.map(lambda x: str(x).isdigit()).to_numpy()
-            | grid_designer_ui.grid_data.map(
-                lambda x: str(x).startswith("P")
-            ).to_numpy()
-            # | grid_designer_ui.grid_data.map(lambda x: str(x) == "B").to_numpy()
+        sm_and_tc_obstacle_voids = self._create_voids(
+            grid_designer_ui=grid_designer_ui, void_type="SM and TC obstacles"
         )
+        sm_obstacle_only_voids = self._create_voids(
+            grid_designer_ui=grid_designer_ui, void_type="SM obstacles only"
+        )
+        voids = sm_and_tc_obstacle_voids + sm_obstacle_only_voids
+
+        zone = InputZone(
+            max_x=grid_designer_ui.grid_data.shape[1] - 1,
+            max_y=grid_designer_ui.grid_data.shape[0] - 1,
+            max_z=grid_designer_ui.z_size,
+            voids=voids,
+        )
+        self.zones = [zone]
+
+    def _create_voids(
+        self, grid_designer_ui: GridDesignerUI, void_type: str
+    ) -> List[InputVoid]:
+        """
+        Create voids from the grid designer UI. The voids are separated by whether they
+        are exclusively SM obstacles, or SM and TC obstacles.
+
+        Parameters
+        ----------
+        grid_designer_ui : GridDesignerUI
+            The grid designer UI.
+        void_type : str
+            The type of void to create.
+
+        Returns
+        -------
+        List[InputVoid]
+            A list of voids.
+
+        Raises
+        ------
+        NotImplementedError
+            If the void type is not implemented.
+        """
+        if void_type == "SM and TC obstacles":
+            void_mask = ~(
+                grid_designer_ui.grid_data.map(lambda x: str(x).isdigit()).to_numpy()
+                | grid_designer_ui.grid_data.map(
+                    lambda x: str(x).startswith("P")
+                ).to_numpy()
+                | grid_designer_ui.grid_data.map(lambda x: str(x) == "B").to_numpy()
+            )
+            start_z = 0
+
+        elif void_type == "SM obstacles only":
+            void_mask = grid_designer_ui.grid_data.map(
+                lambda x: str(x) == "B"
+            ).to_numpy()
+            start_z = 1
+
+        else:
+            raise NotImplementedError(f"Void type {void_type} not implemented")
+
         rows, cols = void_mask.shape
         voids = []
 
@@ -69,18 +117,12 @@ class InputZonesAndStations:
             processed[start_y : end_y + 1, start_x : end_x + 1] = True
 
             void = InputVoid(
-                from_=Coordinates(x=int(start_x), y=int(start_y), z=0),
+                from_=Coordinates(x=int(start_x), y=int(start_y), z=start_z),
                 to=Coordinates(x=int(end_x), y=int(end_y), z=grid_designer_ui.z_size),
             )
             voids.append(void)
 
-        zone = InputZone(
-            max_x=grid_designer_ui.grid_data.shape[1] - 1,
-            max_y=grid_designer_ui.grid_data.shape[0] - 1,
-            max_z=grid_designer_ui.z_size,
-            voids=voids,
-        )
-        self.zones = [zone]
+        return voids
 
     def _create_stations(self, grid_designer_ui: GridDesignerUI):
         """
