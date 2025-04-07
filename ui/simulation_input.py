@@ -73,12 +73,23 @@ class SimulationInputUI:
         }
         simulation_duration = duration_mapping[simulation_duration]
 
-        streamlit.write("#### Job distribution")
-        streamlit.write(
-            "The job distribution is based on generalised truncated Pareto distribution."
-            + " Input `p` and `q`, such that `p%` of jobs contribute to top `q%` "
-            + "of the grid layers."
-        )
+        streamlit.write("#### Order line distribution")
+        with streamlit.expander("More information"):
+            streamlit.write(
+                """ 
+                The order line distribution is based on generalised truncated Pareto 
+                distribution. Input `p` and `q`, such that `q%` of SKUs contribute 
+                to `p%` of the job volume (note the order of `p` and `q`). This is also 
+                equivalent to `p%` of order lines contribute to top `q%` of the layers 
+                in the grid.
+
+                For example, the standard 80/20 rule implies that 20% of the SKUs
+                contribute to 80% of the jobvolume. Equivalently, 80% of the order lines
+                contribute to the top 20% of the layers in the grid. In this example,
+                `p = 80` and `q = 20`.
+                """
+            )
+
         col1, col2 = streamlit.columns(2)
         pareto_p = (
             col1.number_input("p (%)", min_value=0, max_value=100, value=80) / 100
@@ -87,7 +98,7 @@ class SimulationInputUI:
             col2.number_input("q (%)", min_value=0, max_value=100, value=20) / 100
         )
 
-        self._show_job_distribution_plot(pareto_p, pareto_q)
+        self._show_order_line_distribution_plot(pareto_p, pareto_q)
 
         # Assign values for later use
         self.pick_throughput = pick_throughput
@@ -108,7 +119,7 @@ class SimulationInputUI:
         """
         return math.ceil(total_throughput / 25)
 
-    def _show_job_distribution_plot(self, pareto_p: float, pareto_q: float):
+    def _show_order_line_distribution_plot(self, pareto_p: float, pareto_q: float):
         z_size = self.grid_designer_ui.z_size
         if z_size is None:
             return
@@ -122,7 +133,7 @@ class SimulationInputUI:
         ]
         top_x0_sum = sum(probabilities_percent[: int(x0)])
         streamlit.info(
-            f"{top_x0_sum:.1f}% of the jobs go into the top {int(x0)} layer(s).",
+            f"{top_x0_sum:.1f}% of the order lines go into the top {int(x0)} layer(s).",
         )
 
         # xq = pareto_q * z_size + 1
@@ -142,7 +153,7 @@ class SimulationInputUI:
         )
 
         fig.update_layout(
-            title="Job Distribution by Position of Layer",
+            title="Order Line Distribution by Position of Layer",
             xaxis_title="Position of Layer",
             yaxis_title="Probability of layer (%)",
             showlegend=False,
@@ -156,4 +167,6 @@ class SimulationInputUI:
 
         streamlit.plotly_chart(fig)
 
-        self.job_distribution_probabilities = [i / 100 for i in probabilities_percent]
+        self.order_line_distribution_probabilities = [
+            i / 100 for i in probabilities_percent
+        ]

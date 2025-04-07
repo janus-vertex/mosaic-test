@@ -31,6 +31,7 @@ class Simulator:
             ("Configure TC Obstacles", self._configure_TC_obstacles),
             ("Configure Skycar Setup", self._configure_skycar_setup),
             ("Start Cube", self._start_cube),
+            ("Set Time Delay", self._set_delay),
             ("Send Jobs", self._send_list_of_jobs),
         ]
 
@@ -119,19 +120,13 @@ class Simulator:
         )
         return response
 
-    # def _send_jobs_1(self) -> requests.Response:
-    #     response = MosaicRequest.send_request(
-    #         url=f"{self.SM_BASE}/v3/dry-runs",
-    #         data=self.simulation_preparation_ui.input_jobs_1.to_json(type="dict"),
-    #     )
-    #     return response
-
-    # def _send_jobs_2(self) -> requests.Response:
-    #     response = MosaicRequest.send_request(
-    #         url=f"{self.SM_BASE}/v3/dry-runs",
-    #         data=self.simulation_preparation_ui.input_jobs_2.to_json(type="dict"),
-    #     )
-    #     return response
+    def _set_delay(self) -> requests.Response:
+        response = MosaicRequest.send_request(
+            url=f"{self.SM_BASE}/v3/settings/auto-store",
+            method="PUT",
+            data=self.simulation_preparation_ui.input_delay.to_json(type="dict"),
+        )
+        return response
 
     def _send_list_of_jobs(self) -> requests.Response:
         for input_jobs in self.simulation_preparation_ui.input_jobs_list:
@@ -139,12 +134,3 @@ class Simulator:
                 url=f"{self.SM_BASE}/v3/dry-runs",
                 data=input_jobs.to_json(type="dict"),
             )
-
-    # def _send_jobs(self, layer_index: int) -> requests.Response:
-    #     response = MosaicRequest.send_request(
-    #         url=f"{self.SM_BASE}/v3/dry-runs",
-    #         data=self.simulation_preparation_ui.input_jobs_list[layer_index].to_json(
-    #             type="dict"
-    #         ),
-    #     )
-    #     return response

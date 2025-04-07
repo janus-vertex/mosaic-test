@@ -61,15 +61,13 @@ class ParetoCalculator:
         q: float,
         tolerance: float = 1e-5,
         alpha_search_range: Tuple[float, float] = (0.01, 5),
-    ) -> float:
+    ) -> Tuple[float, float]:
         left, right = alpha_search_range
         x0 = q * (self.max_x - self.min_x) + self.min_x
-        print(f"{x0=}")
 
         while abs(right - left) > tolerance:
             alpha = (left + right) / 2
             cdf_value = self.cdf(x0, alpha)
-            print(f"{alpha=}, {cdf_value=}")
 
             if cdf_value < p:
                 left = alpha
@@ -83,4 +81,3 @@ class ParetoCalculator:
 
     def theoretical_cdf_minimum(self, x: float) -> float:
         return self.cdf(x, alpha=0.001)
-    

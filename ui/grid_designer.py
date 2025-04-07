@@ -109,10 +109,11 @@ class GridDesignerUI:
             delta_color="off",
         )
         col3.metric(
-            "Buffer percentage from grid",
+            "🟢 Buffer percentage from grid",
             value=buffer_percentage_from_grid,
             delta=delta_buffer_percentage,
             delta_color="off",
+            # border=True,
         )
 
         if self.buffer_ratio is not None and self.buffer_ratio < 0:

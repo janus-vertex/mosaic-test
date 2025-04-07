@@ -11,6 +11,7 @@ from input_creation import (
     InputSMObstacles,
     InputTCObstacles,
     InputZonesAndStations,
+    InputDelay,
 )
 from ui.grid_designer import GridDesignerUI
 from ui.simulation_input import SimulationInputUI
@@ -37,6 +38,10 @@ class SimulationPreparationUI:
             model=Parameters.ZONE_NAME,
         )
         input_tc_obstacles = InputTCObstacles(grid_designer_ui=self.grid_designer_ui)
+        input_delay = InputDelay(
+            simulation_input_ui=self.simulation_input_ui,
+            input_zones_and_stations=input_zones_and_stations,
+        )
         input_jobs_list = self._create_input_jobs_list(
             input_zones_and_stations=input_zones_and_stations
         )
@@ -74,6 +79,12 @@ class SimulationPreparationUI:
                     json_data=json_data, file_name="reset-6.json"
                 )
 
+            with streamlit.expander("reset-delay.json: Delay"):
+                json_data = input_delay.to_json()
+                self._show_individual_json_file(
+                    json_data=json_data, file_name="reset-delay.json"
+                )
+
             for input_jobs in input_jobs_list:
                 with streamlit.expander(
                     f"reset-job-{input_jobs.minLayer}.json: Job Parameters"
@@ -98,6 +109,7 @@ class SimulationPreparationUI:
         self.input_buffer = input_buffer
         self.input_skycar_setup = input_skycar_setup
         self.input_tc_obstacles = input_tc_obstacles
+        self.input_delay = input_delay
         self.input_jobs_list = input_jobs_list
         self.server_number = server_number
 
@@ -125,7 +137,9 @@ class SimulationPreparationUI:
                     len(input_zones_and_stations.stations)
                     * self.simulation_input_ui.goods_in_throughput
                     * self.simulation_input_ui.simulation_duration
-                    * self.simulation_input_ui.job_distribution_probabilities[i - 1]
+                    * self.simulation_input_ui.order_line_distribution_probabilities[
+                        i - 1
+                    ]
                 ),
             )
             for i in range(1, self.grid_designer_ui.z_size + 1)
