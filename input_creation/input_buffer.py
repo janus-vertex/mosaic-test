@@ -5,7 +5,7 @@ from core.parameters import Parameters
 class InputBuffer:
     def __init__(self, buffer_ratio: float):
         # Ensure buffer_ratio is between 0 and 1
-        self.percentage = round(max(0.0, min(buffer_ratio, 1.0)), 2)
+        self.percentage = round(max(0.0, min(1 - buffer_ratio, 1.0)), 2)
         self.zoneGroup = Parameters.ZONE_NAME
 
     def to_json(
