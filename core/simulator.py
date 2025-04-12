@@ -14,7 +14,9 @@ class Simulator:
         self._set_server()
 
     def run(self):
-        is_simulation_running = MosaicRequest.health_check(self.TC_BASE)
+        is_simulation_running = MosaicRequest.health_check(
+            TC_base=self.TC_BASE, SM_base=self.SM_BASE
+        )
         if is_simulation_running:
             streamlit.warning(
                 "A simulation is running. Please stop it before running another one by "

@@ -3,20 +3,28 @@ from typing import Any, Dict, Optional
 
 import requests
 import streamlit
+from core.parameters import Parameters
 
 
 class MosaicRequest:
     @staticmethod
-    def health_check(TC_base: str) -> bool | None:
+    def health_check(TC_base: str, SM_base: str) -> bool | None:
         try:
-            response = MosaicRequest.send_request(
+            tc_response = MosaicRequest.send_request(
                 url=f"{TC_base}/operation/healthcheck", method="GET", timeout=1
             )
-            real_response = json.loads(response.text)
-            return real_response["model"]["cycle_stop"]["status"]
+            tc_real_response = json.loads(tc_response.text)
+
+            sm_response = MosaicRequest.send_request(
+                url=f"{SM_base}/v3/settings/OrderDispatcher", method="GET", timeout=1
+            )
+            sm_real_response = json.loads(sm_response.text)
+            return (
+                tc_real_response["model"]["cycle_stop"]["status"]
+                and sm_real_response["data"]["value"][Parameters.ZONE_NAME]["isActive"]
+            )
 
         except requests.exceptions.RequestException as _:
-            streamlit.warning("Server is unavailable.")
             return None
 
     @staticmethod
