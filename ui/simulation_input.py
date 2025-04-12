@@ -18,7 +18,7 @@ class SimulationInputUI:
     def show(self):
         streamlit.write("## Simulation Input")
 
-        streamlit.write("#### Peak throughput")
+        streamlit.write("#### Peak throughput per station")
         col1, col2 = streamlit.columns(2)
         pick_throughput = col1.number_input(
             "Pick throughput (bins/h)", min_value=1, value=1000

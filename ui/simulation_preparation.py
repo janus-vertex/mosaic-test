@@ -135,7 +135,10 @@ class SimulationPreparationUI:
                 max_layer=i,
                 quantity=math.ceil(
                     len(input_zones_and_stations.stations)
-                    * self.simulation_input_ui.goods_in_throughput
+                    * (
+                        self.simulation_input_ui.goods_in_throughput
+                        + self.simulation_input_ui.pick_throughput
+                    )
                     * self.simulation_input_ui.simulation_duration
                     * self.simulation_input_ui.order_line_distribution_probabilities[
                         i - 1
