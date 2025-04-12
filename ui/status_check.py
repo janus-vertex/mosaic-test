@@ -1,6 +1,6 @@
 import streamlit
 
-from core.config import TC_BASE_1, TC_BASE_2
+from core.config import TC_BASE_1, TC_BASE_2, SM_BASE_1, SM_BASE_2
 from core.requests import MosaicRequest
 
 
@@ -14,14 +14,16 @@ class StatusCheckUI:
         col1, col2 = streamlit.columns(2)
         with col1:
             streamlit.write("Server 1")
-            self.check_if_simulation_is_running(TC_BASE_1)
+            self.check_if_simulation_is_running(TC_base=TC_BASE_1, SM_base=SM_BASE_1)
         with col2:
             streamlit.write("Server 2")
-            self.check_if_simulation_is_running(TC_BASE_2)
+            self.check_if_simulation_is_running(TC_base=TC_BASE_2, SM_base=SM_BASE_2)
 
-    def check_if_simulation_is_running(self, TC_base: str):
-        is_simulation_running = MosaicRequest.health_check(TC_base)
-        
+    def check_if_simulation_is_running(self, TC_base: str, SM_base: str):
+        is_simulation_running = MosaicRequest.health_check(
+            TC_base=TC_base, SM_base=SM_base
+        )
+
         if is_simulation_running:
             streamlit.success("Simulation is running.")
             is_stop_simulation = streamlit.button("Stop Simulation")
@@ -30,3 +32,6 @@ class StatusCheckUI:
 
         elif not is_simulation_running and is_simulation_running is not None:
             streamlit.success("No simulation is running.")
+
+        else:
+            streamlit.warning("Server is unavailable.")
