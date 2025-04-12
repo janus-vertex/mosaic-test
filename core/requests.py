@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import requests
 import streamlit
@@ -7,6 +7,48 @@ from core.parameters import Parameters
 
 
 class MosaicRequest:
+    @staticmethod
+    def SM_health_check(SM_base: str) -> bool:
+        try:
+            sm_response = MosaicRequest.send_request(
+                url=f"{SM_base}/v3/settings/OrderDispatcher", method="GET", timeout=1
+            )
+            sm_real_response = json.loads(sm_response.text)
+            return sm_real_response["data"]["value"][Parameters.ZONE_NAME]["isActive"]
+
+        except requests.exceptions.RequestException as _:
+            return False
+
+    @staticmethod
+    def TC_status_check(TC_base: str) -> Tuple[bool, bool | None, bool | None]:
+        try:
+            tc_response = MosaicRequest.send_request(
+                url=f"{TC_base}/operation/healthcheck", method="GET", timeout=1
+            )
+            tc_real_response = json.loads(tc_response.text)
+            is_healthy = True
+            is_simulation_running = tc_real_response["model"]["cycle_stop"]["status"]
+            is_simulation_completed = (
+                tc_real_response["model"]["num_of_jobs"] == 0
+                and tc_real_response["model"]["num_of_processing_jobs"] == 0
+            )
+
+            return is_healthy, is_simulation_running, is_simulation_completed
+
+        except requests.exceptions.RequestException as _:
+            is_healthy = False
+            return is_healthy, None, None
+
+    @staticmethod
+    def general_check(TC_base: str, SM_base: str):
+        is_sm_healthy = MosaicRequest.SM_health_check(SM_base)
+        is_tc_healthy, is_simulation_running, is_simulation_completed = (
+            MosaicRequest.TC_status_check(TC_base)
+        )
+        is_healthy = is_sm_healthy and is_tc_healthy
+
+        return is_healthy, is_simulation_running, is_simulation_completed
+
     @staticmethod
     def health_check(TC_base: str, SM_base: str) -> bool | None:
         try:
