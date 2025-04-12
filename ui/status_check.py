@@ -20,8 +20,8 @@ class StatusCheckUI:
             self.check_if_simulation_is_running(TC_base=TC_BASE_2, SM_base=SM_BASE_2)
 
     def check_if_simulation_is_running(self, TC_base: str, SM_base: str):
-        is_simulation_running = MosaicRequest.health_check(
-            TC_base=TC_base, SM_base=SM_base
+        _, is_simulation_running, _ = (
+            MosaicRequest.general_check(TC_base=TC_base, SM_base=SM_base)
         )
 
         if is_simulation_running:
