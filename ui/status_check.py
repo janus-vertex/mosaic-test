@@ -20,13 +20,15 @@ class StatusCheckUI:
             self.check_if_simulation_is_running(TC_base=TC_BASE_2, SM_base=SM_BASE_2)
 
     def check_if_simulation_is_running(self, TC_base: str, SM_base: str):
-        _, is_simulation_running, _ = (
-            MosaicRequest.general_check(TC_base=TC_base, SM_base=SM_base)
+        _, is_simulation_running, _ = MosaicRequest.general_check(
+            TC_base=TC_base, SM_base=SM_base
         )
 
         if is_simulation_running:
             streamlit.success("Simulation is running.")
-            is_stop_simulation = streamlit.button("Stop Simulation", key=f"{TC_base} stop button")
+            is_stop_simulation = streamlit.button(
+                "Stop Simulation", key=f"{TC_base} stop button"
+            )
             if is_stop_simulation:
                 MosaicRequest.stop(TC_base)
 

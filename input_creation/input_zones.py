@@ -145,21 +145,21 @@ class InputZonesAndStations:
 
             if not grid_station.endswith("D") and not grid_station.endswith("P"):
                 drop = InputDropOrPick(
-                    coordinates=Coordinates(x=x, y=y, z=station_height),
+                    coordinates=Coordinates(x=x, y=y, z=station_height), capacity=2
                 )
                 pick = InputDropOrPick(
-                    coordinates=Coordinates(x=x, y=y, z=station_height),
+                    coordinates=Coordinates(x=x, y=y, z=station_height), capacity=1
                 )
                 station = InputStation(code=station_number, drop=drop, pick=pick)
                 stations.append(station)
             else:
                 if grid_station.endswith("D"):
                     drop = InputDropOrPick(
-                        coordinates=Coordinates(x=x, y=y, z=station_height),
+                        coordinates=Coordinates(x=x, y=y, z=station_height), capacity=2
                     )
                 else:
                     pick = InputDropOrPick(
-                        coordinates=Coordinates(x=x, y=y, z=station_height),
+                        coordinates=Coordinates(x=x, y=y, z=station_height), capacity=1
                     )
                     station = InputStation(code=station_number, drop=drop, pick=pick)
                     stations.append(station)
