@@ -26,7 +26,7 @@ class StatusCheckUI:
 
         if is_simulation_running:
             streamlit.success("Simulation is running.")
-            is_stop_simulation = streamlit.button("Stop Simulation")
+            is_stop_simulation = streamlit.button("Stop Simulation", key=f"{TC_base} stop button")
             if is_stop_simulation:
                 MosaicRequest.stop(TC_base)
 
