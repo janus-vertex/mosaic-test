@@ -12,6 +12,8 @@ from frontend.ui_components import StatusCheckUI
 
 
 def main():
+    streamlit.set_page_config(page_title="MOSAIC", page_icon=":robot_face:")
+
     streamlit.title("Mosaic App")
 
     status_check_ui = StatusCheckUI()

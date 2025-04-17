@@ -3,7 +3,7 @@ import json
 import requests
 import streamlit
 from core.config import SM_BASE_1, SM_BASE_2, TC_BASE_1, TC_BASE_2
-from core.requests import MosaicRequest
+from frontend.core.simulation_requests import MosaicRequest
 from ui_components.simulation_preparation import SimulationPreparationUI
 
 
@@ -13,13 +13,19 @@ class Simulator:
         self._set_server()
 
     def run(self):
-        _, is_simulation_running, _ = MosaicRequest.general_check(
-            TC_base=self.TC_BASE, SM_base=self.SM_BASE
+        is_healthy, is_simulation_running, _, simulation_id = (
+            MosaicRequest.general_check(TC_base=self.TC_BASE, SM_base=self.SM_BASE)
         )
+        if not is_healthy:
+            streamlit.warning(
+                "Server is unavailable. Please choose other server.", icon="⚠️"
+            )
+            return
+
         if is_simulation_running:
             streamlit.warning(
-                "A simulation is running. Please stop it before running another one by "
-                + "pressing the stop button at the top of the page.",
+                f"Simulation {simulation_id} is running. Please stop it before running "
+                + "another one by pressing the stop button at the top of the page.",
                 icon="⚠️",
             )
             return
