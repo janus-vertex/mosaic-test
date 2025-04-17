@@ -3,7 +3,7 @@ import math
 import streamlit
 
 from core.pareto import ParetoCalculator
-from ui.grid_designer import GridDesignerUI
+from ui_components.grid_designer import GridDesignerUI
 import plotly.graph_objects as go
 
 

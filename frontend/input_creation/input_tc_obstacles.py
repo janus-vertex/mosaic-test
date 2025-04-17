@@ -1,7 +1,7 @@
 import pandas
 import json
 
-from ui.grid_designer import GridDesignerUI
+from ui_components.grid_designer import GridDesignerUI
 
 
 class InputTCObstacles:

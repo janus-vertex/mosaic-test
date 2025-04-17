@@ -2,10 +2,9 @@ import json
 
 import requests
 import streamlit
-
 from core.config import SM_BASE_1, SM_BASE_2, TC_BASE_1, TC_BASE_2
 from core.requests import MosaicRequest
-from ui.simulation_preparation import SimulationPreparationUI
+from ui_components.simulation_preparation import SimulationPreparationUI
 
 
 class Simulator:
@@ -14,8 +13,8 @@ class Simulator:
         self._set_server()
 
     def run(self):
-        _, is_simulation_running, _ = (
-            MosaicRequest.general_check(TC_base=self.TC_BASE, SM_base=self.SM_BASE)
+        _, is_simulation_running, _ = MosaicRequest.general_check(
+            TC_base=self.TC_BASE, SM_base=self.SM_BASE
         )
         if is_simulation_running:
             streamlit.warning(
