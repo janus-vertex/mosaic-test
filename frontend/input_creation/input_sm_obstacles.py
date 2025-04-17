@@ -4,7 +4,7 @@ import numpy
 import pandas
 
 from core.parameters import Parameters
-from ui.grid_designer import GridDesignerUI
+from ui_components.grid_designer import GridDesignerUI
 
 
 class InputSMObstacles:

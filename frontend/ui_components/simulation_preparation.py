@@ -13,8 +13,8 @@ from input_creation import (
     InputZonesAndStations,
     InputDelay,
 )
-from ui.grid_designer import GridDesignerUI
-from ui.simulation_input import SimulationInputUI
+from ui_components.grid_designer import GridDesignerUI
+from ui_components.simulation_input import SimulationInputUI
 
 
 class SimulationPreparationUI:

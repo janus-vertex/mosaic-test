@@ -6,6 +6,7 @@ import numpy
 import pandas
 import plotly.graph_objects as go
 import streamlit
+from pathlib import Path
 
 EXCEL_OPTIONS = [0, 1, 2, 3]
 MAX_SIZE = 50
@@ -140,16 +141,22 @@ class GridDesignerUI:
             "Upload a grid excel file for simulation. To get started, click below for "
             + "template or example, or refer to the instructions."
         )
+        
+        # Update file paths to use absolute paths from project root
+        files_dir = Path(__file__).parents[1] / "files"
+        template_path = files_dir / "template.xlsx"
+        example_path = files_dir / "example.xlsx"
+
         streamlit.download_button(
             "Download template",
             file_name="template.xlsx",
-            data=open("files/template.xlsx", "rb").read(),
+            data=open(template_path, "rb").read(),
             type="primary",
         )
         streamlit.download_button(
             "Download example",
             file_name="example.xlsx",
-            data=open("files/example.xlsx", "rb").read(),
+            data=open(example_path, "rb").read(),
             type="primary",
         )
 

@@ -1,20 +1,32 @@
 import json
 from typing import List
-from ui.simulation_input import SimulationInputUI
+
 from input_creation.input_zones import InputZonesAndStations
+from core.parameters import Parameters
+from ui_components.grid_designer import GridDesignerUI
+from ui_components.simulation_input import SimulationInputUI
+
+SIMULATION_DURATION_IN_HOURS: int = 5
 
 
-class InputDelay:
+class InputJobs:
     def __init__(
         self,
-        simulation_input_ui: SimulationInputUI,
         input_zones_and_stations: InputZonesAndStations,
+        quantity: int,
+        min_layer: int = 1,
+        max_layer: int = 2,
     ):
-        self.action = "ENABLE"
+        self.mode = "SINGLE_ROUND"
+        self.allowCrossZoneGroup = False
+        self.enableAutoStore = True
+        self.pickFromZoneGroups = [Parameters.ZONE_NAME]
+        self.minLayer = min_layer
+        self.maxLayer = max_layer
         self.stations = self._get_list_of_stations(
             input_zones_and_stations=input_zones_and_stations
         )
-        self.delay = simulation_input_ui.goods_in_time + simulation_input_ui.pick_time
+        self.qty = quantity
 
     def _get_list_of_stations(
         self, input_zones_and_stations: InputZonesAndStations
@@ -22,7 +34,7 @@ class InputDelay:
         return [station.code for station in input_zones_and_stations.stations]
 
     def to_json(
-        self, save: bool = False, filename: str = "reset-delay.json", type: str = "str"
+        self, save: bool = False, filename: str = "reset-job.json", type: str = "str"
     ) -> str:
         json_str = json.dumps(
             self, default=lambda o: o.__dict__, sort_keys=True, indent=4

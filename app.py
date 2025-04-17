@@ -1,7 +1,19 @@
+import sys
+from pathlib import Path
+
+# Add frontend and backend to Python path
+root_dir = Path(__file__).parent
+sys.path.extend([str(root_dir / "frontend"), str(root_dir / "backend")])
+
 import streamlit
 
-from core.simulator import Simulator
-from ui import GridDesignerUI, SimulationInputUI, SimulationPreparationUI, StatusCheckUI
+from frontend.core.simulator import Simulator
+from frontend.ui_components import (
+    GridDesignerUI,
+    SimulationInputUI,
+    SimulationPreparationUI,
+    StatusCheckUI,
+)
 
 
 def main():
@@ -33,7 +45,6 @@ def main():
 
     if is_start_simulation:
         simulator.run()
-
 
 
 if __name__ == "__main__":
