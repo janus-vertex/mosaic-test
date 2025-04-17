@@ -7,13 +7,8 @@ sys.path.extend([str(root_dir / "frontend"), str(root_dir / "backend")])
 
 import streamlit
 
-from frontend.core.simulator import Simulator
-from frontend.ui_components import (
-    GridDesignerUI,
-    SimulationInputUI,
-    SimulationPreparationUI,
-    StatusCheckUI,
-)
+from frontend.tabs import simulation_tab, result_tab
+from frontend.ui_components import StatusCheckUI
 
 
 def main():
@@ -22,29 +17,13 @@ def main():
     status_check_ui = StatusCheckUI()
     status_check_ui.show()
 
-    grid_designer_ui = GridDesignerUI()
-    is_grid_designer_ui_success = grid_designer_ui.show()
+    tab1, tab2 = streamlit.tabs(["Simulation", "Result"])
 
-    simulation_input_ui = SimulationInputUI(grid_designer_ui=grid_designer_ui)
-    is_simulation_input_ui_success = simulation_input_ui.show()
+    with tab1:
+        simulation_tab()
 
-    if not is_grid_designer_ui_success or not is_simulation_input_ui_success:
-        return
-
-    simulation_preparation_ui = SimulationPreparationUI(
-        grid_designer_ui=grid_designer_ui, simulation_input_ui=simulation_input_ui
-    )
-    is_simulation_preparation_ui_success = simulation_preparation_ui.show()
-
-    if not is_simulation_preparation_ui_success:
-        return
-
-    simulator = Simulator(simulation_preparation_ui=simulation_preparation_ui)
-
-    is_start_simulation = streamlit.button("Start Simulation", type="primary")
-
-    if is_start_simulation:
-        simulator.run()
+    with tab2:
+        result_tab()
 
 
 if __name__ == "__main__":
