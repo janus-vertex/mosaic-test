@@ -18,6 +18,32 @@ class SimulationInputUI:
     def show(self):
         streamlit.write("## Simulation Input")
 
+        streamlit.write("#### General settings")
+        col1, col2 = streamlit.columns(2)
+        simulation_name = col1.text_input(
+            "Simulation name (default name is given if left blank)", value=""
+        )
+        simulation_duration = col2.selectbox(
+            "Approximate simulation duration",
+            options=[
+                "10 minutes",
+                "30 minutes",
+                "1 hour",
+                "2 hours",
+                "4 hours",
+                "8 hours",
+            ],
+        )
+        duration_mapping = {
+            "10 minutes": 1 / 6,
+            "30 minutes": 1 / 2,
+            "1 hour": 1,
+            "2 hours": 2,
+            "4 hours": 4,
+            "8 hours": 8,
+        }
+        simulation_duration = duration_mapping[simulation_duration]
+
         streamlit.write("#### Peak throughput per station")
         col1, col2 = streamlit.columns(2)
         pick_throughput = col1.number_input(
@@ -51,28 +77,6 @@ class SimulationInputUI:
             "Goods-in handling time (s)", min_value=1, value=20
         )
 
-        streamlit.write("#### Simulation duration")
-        simulation_duration = streamlit.selectbox(
-            "Approximate simulation duration",
-            options=[
-                "10 minutes",
-                "30 minutes",
-                "1 hour",
-                "2 hours",
-                "4 hours",
-                "8 hours",
-            ],
-        )
-        duration_mapping = {
-            "10 minutes": 1 / 6,
-            "30 minutes": 1 / 2,
-            "1 hour": 1,
-            "2 hours": 2,
-            "4 hours": 4,
-            "8 hours": 8,
-        }
-        simulation_duration = duration_mapping[simulation_duration]
-
         streamlit.write("#### Order line distribution")
         with streamlit.expander("More information"):
             streamlit.write(
@@ -84,7 +88,7 @@ class SimulationInputUI:
                 in the grid.
 
                 For example, the standard 80/20 rule implies that 20% of the SKUs
-                contribute to 80% of the jobvolume. Equivalently, 80% of the order lines
+                contribute to 80% of the job volume. Equivalently, 80% of the order lines
                 contribute to the top 20% of the layers in the grid. In this example,
                 `p = 80` and `q = 20`.
                 """
@@ -107,6 +111,7 @@ class SimulationInputUI:
         self.goods_in_time = goods_in_time
         self.number_of_skycars = number_of_skycars
         self.simulation_duration = simulation_duration
+        self.simulation_name = simulation_name
 
         streamlit.divider()
 
@@ -135,13 +140,6 @@ class SimulationInputUI:
         streamlit.info(
             f"{top_x0_sum:.1f}% of the order lines go into the top {int(x0)} layer(s).",
         )
-
-        # xq = pareto_q * z_size + 1
-        # theoretical_minimum_p = pareto.cdf(xq, alpha=0.001)
-        # theoretical_maximum_q = (pareto.inverse_cdf(pareto_p, alpha=0.001) - 1) / z_size
-
-        # streamlit.info(f"Theoretical minimum p: {theoretical_minimum_p}")
-        # streamlit.info(f"Theoretical maximum q: {theoretical_maximum_q}")
 
         fig = go.Figure(
             data=go.Bar(

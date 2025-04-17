@@ -1,7 +1,7 @@
 import streamlit
 
 from core.config import TC_BASE_1, TC_BASE_2, SM_BASE_1, SM_BASE_2
-from core.requests import MosaicRequest
+from frontend.core.simulation_requests import MosaicRequest
 
 
 class StatusCheckUI:
@@ -20,19 +20,29 @@ class StatusCheckUI:
             self.check_if_simulation_is_running(TC_base=TC_BASE_2, SM_base=SM_BASE_2)
 
     def check_if_simulation_is_running(self, TC_base: str, SM_base: str):
-        _, is_simulation_running, _ = MosaicRequest.general_check(
-            TC_base=TC_base, SM_base=SM_base
+        is_healthy, is_simulation_running, is_simulation_completed, simulation_id = (
+            MosaicRequest.general_check(TC_base=TC_base, SM_base=SM_base)
         )
 
-        if is_simulation_running:
-            streamlit.success("Simulation is running.")
+        if not is_healthy:
+            streamlit.warning("Server is unavailable.")
+
+        elif is_simulation_running:
+            if is_simulation_completed:
+                streamlit.success(
+                    f"Simulation {simulation_id} completed successfully!"
+                )
+            else:
+                streamlit.success(
+                    f"Simulation {simulation_id} is running."
+                )
             is_stop_simulation = streamlit.button(
                 "Stop Simulation", key=f"{TC_base} stop button"
             )
             if is_stop_simulation:
                 MosaicRequest.stop(TC_base)
 
-        elif not is_simulation_running and is_simulation_running is not None:
+        elif is_simulation_running is False:
             streamlit.success("No simulation is running.")
 
         else:
