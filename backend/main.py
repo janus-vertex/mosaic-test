@@ -1,21 +1,12 @@
 from datetime import datetime
 
 from fastapi import BackgroundTasks, Body, FastAPI
-from job_service import JobService
-from pydantic import BaseModel
+from job_service import JobService, JobsCreationRequest
 
 app = FastAPI()
 
 # Add this at the top level of the file
 job_creation_status = {"is_successful": False}
-
-
-class JobsCreationRequest(BaseModel):
-    pick_time: int
-    goods_in_time: int
-    pick_throughput: int
-    goods_in_throughput: int
-    number_of_jobs: int
 
 
 @app.get("/time")
@@ -37,12 +28,7 @@ async def create_jobs(
     # Reset the status before starting new job creation
     job_creation_status["is_successful"] = False
 
-    job_service = JobService(
-        pick_time=jobs_creation_request.pick_time,
-        goods_in_time=jobs_creation_request.goods_in_time,
-        pick_throughput=jobs_creation_request.pick_throughput,
-        goods_in_throughput=jobs_creation_request.goods_in_throughput,
-    )
+    job_service = JobService(jobs_creation_request=jobs_creation_request)
 
     def create_jobs_and_update_status(number_of_jobs: int):
         job_service.create_jobs(number_of_jobs=number_of_jobs)
