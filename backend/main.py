@@ -6,7 +6,7 @@ from job_service import JobService, JobsCreationRequest
 app = FastAPI()
 
 # Add this at the top level of the file
-job_creation_status = {"is_successful": False}
+job_creation_status = {"is_successful": False, "stop_requested": False}
 
 
 @app.get("/time")
@@ -20,6 +20,12 @@ async def get_status():
     return job_creation_status
 
 
+@app.post("/jobs/stop")
+async def stop_jobs():
+    job_creation_status["stop_requested"] = True
+    return {"message": "Job creation process has been stopped"}
+
+
 @app.post("/jobs/create")
 async def create_jobs(
     background_tasks: BackgroundTasks,
@@ -27,17 +33,18 @@ async def create_jobs(
 ):
     # Reset the status before starting new job creation
     job_creation_status["is_successful"] = False
+    job_creation_status["stop_requested"] = False
 
-    job_service = JobService(jobs_creation_request=jobs_creation_request)
+    job_service = JobService(
+        jobs_creation_request=jobs_creation_request,
+        job_creation_status=job_creation_status,
+    )
 
-    def create_jobs_and_update_status(number_of_jobs: int):
-        job_service.create_jobs(number_of_jobs=number_of_jobs)
+    def create_jobs_and_update_status():
+        job_service.create_jobs()
         job_creation_status["is_successful"] = True
 
-    background_tasks.add_task(
-        create_jobs_and_update_status,
-        number_of_jobs=jobs_creation_request.number_of_jobs,
-    )
+    background_tasks.add_task(create_jobs_and_update_status)
 
     return {"message": "Job creation process has been started"}
 

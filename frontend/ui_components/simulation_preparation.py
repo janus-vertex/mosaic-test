@@ -4,15 +4,13 @@ from typing import List
 import streamlit
 
 from core.parameters import Parameters
-from input_creation import (
-    InputBuffer,
-    InputJobs,
-    InputSkyCarSetup,
-    InputSMObstacles,
-    InputTCObstacles,
-    InputZonesAndStations,
-    InputDelay,
-)
+from input_creation.input_buffer import InputBuffer
+from input_creation.input_jobs import InputJobs
+from input_creation.input_skycar import InputSkyCarSetup
+from input_creation.input_sm_obstacles import InputSMObstacles
+from input_creation.input_tc_obstacles import InputTCObstacles
+from input_creation.input_zones import InputZonesAndStations
+from input_creation.input_delay import InputDelay
 from ui_components.grid_designer import GridDesignerUI
 from ui_components.simulation_input import SimulationInputUI
 

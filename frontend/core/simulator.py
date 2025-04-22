@@ -39,7 +39,7 @@ class Simulator:
             ("Configure Skycar Setup", self._configure_skycar_setup),
             ("Start Cube", self._start_cube),
             ("Set Time Delay", self._set_delay),
-            ("Send Jobs", self._send_list_of_jobs),
+            # ("Send Jobs", self._send_list_of_jobs),
         ]
 
         progress_bar = streamlit.progress(0)

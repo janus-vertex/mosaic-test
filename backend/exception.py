@@ -1,0 +1,2 @@
+class SimulationBackendException(Exception):
+    pass
