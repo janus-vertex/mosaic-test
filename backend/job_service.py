@@ -102,7 +102,7 @@ class JobService:
 
                         # Call bins for station
                         bin_ids = [bin["code"] for bin in station.bins]
-                        # print(f"{bin_ids=}")
+                        print(f"{bin_ids=}")
 
                         _ = self.call_bins(station_code=station.code, bin_ids=bin_ids)
                         logs.loc[len(logs)] = {
@@ -126,7 +126,7 @@ class JobService:
                         and current_time >= station.next_job_time
                     ):
                         bin_id = status_with_bin_at_station["code"]
-                        # print(f"{bin_id=} {station.code=} to be stored")
+                        print(f"{bin_id=} {station.code=} to be stored")
                         _ = self.store_bin(station_code=station.code, bin_id=bin_id)
 
                         logs.loc[len(logs)] = {
@@ -153,15 +153,17 @@ class JobService:
                             )
 
                         station.bins.remove(bin_to_remove)
-                        # print(
-                        #     f"Bins on station {station.code}: {[bin['code'] for bin in station.bins]}"
-                        # )
+                        print(
+                            f"Bins on station {station.code}: {[bin['code'] for bin in station.bins]}"
+                        )
 
                 next_check_time = current_time + 1.0
 
                 # print(f"{next_check_time=}")
 
             time.sleep(0.5)
+
+        self.status["stop_time"] = current_time
 
         logs.loc[len(logs)] = {
             "time": current_time,
