@@ -20,7 +20,7 @@ class Parameters(BaseModel):
     goods_in_time: int
     pick_throughput: int
     goods_in_throughput: int
-    pareto_percentages: List[float]
+    pareto_probabilities: List[float]
 
 
 class JobsCreationRequest(BaseModel):
