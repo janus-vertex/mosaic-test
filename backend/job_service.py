@@ -54,6 +54,7 @@ class JobService:
     SM_BASE : str
         The base URL of the simulation server
     """
+
     def __init__(
         self,
         jobs_creation_request: JobsCreationRequest,
@@ -106,7 +107,9 @@ class JobService:
                             station_type=station.type
                         )
                         station.bins = self.get_bins_from_order(
-                            number_of_bins=number_of_bins
+                            number_of_bins=number_of_bins,
+                            logs=logs,
+                            station_code=station.code,
                         )
 
                         # Call bins from matrix to the station
@@ -116,8 +119,9 @@ class JobService:
                             "time": current_time,
                             "station": station.code,
                             "bin_id": None,
-                            "action": f"{len(bin_ids)} bins called",
+                            "action": f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}",
                         }
+                        print(f"{current_time=}, {station.code=}, {bin_ids=} called")
 
                     # Check station status at intervals to see if a bin is at station
                     station_status = self.check_station_status(station.code)
@@ -144,6 +148,8 @@ class JobService:
                             "bin_id": bin_id,
                             "action": "Bin stored",
                         }
+
+                        print(f"{current_time=}, {station.code=}, {bin_id=} stored")
 
                         # Add delay to the next job time
                         delay = (
@@ -238,7 +244,11 @@ class JobService:
         return number_of_bins
 
     def get_bins_from_order(
-        self, number_of_bins: int = 100, delay: float = 1.0
+        self,
+        number_of_bins: int = 100,
+        delay: float = 1.0,
+        logs: pandas.DataFrame = None,
+        station_code: int = None,
     ) -> List[Dict[str, Any]]:
         """
         Get bins from the order.
@@ -250,6 +260,10 @@ class JobService:
         delay : float, optional
             The delay between each bin call to avoid busy-waiting. Defaults to 1.0
             second.
+        logs : pandas.DataFrame, optional
+            The logs to append the bin call to. Defaults to None.
+        station_code : int, optional
+            The code of the station to append the bin call to. Defaults to None.
 
         Returns
         -------
@@ -276,6 +290,16 @@ class JobService:
         number_of_bins_per_layer = [
             int(numpy.sum(layer_indices == i)) for i in range(len(weights))
         ]
+
+        if logs is not None:
+            logs.loc[len(logs)] = {
+                "time": time.time(),
+                "station": station_code,
+                "bin_id": None,
+                "action": f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
+            }
+
+        print(f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned")
 
         # Get bins from each layer
         bins = []
