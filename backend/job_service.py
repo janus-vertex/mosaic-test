@@ -103,10 +103,10 @@ class JobService:
                     # If there are no more bins for the station, find new bins and call
                     # them from the matrix
                     if len(station.bins) == 0:
-                        number_of_bins = self.get_number_of_bins(
+                        number_of_bins = self._get_number_of_bins(
                             station_type=station.type
                         )
-                        station.bins = self.get_bins_from_order(
+                        station.bins = self._get_bins_from_order(
                             number_of_bins=number_of_bins,
                             logs=logs,
                             station_code=station.code,
@@ -114,7 +114,7 @@ class JobService:
 
                         # Call bins from matrix to the station
                         bin_ids = [bin["code"] for bin in station.bins]
-                        _ = self.call_bins(station_code=station.code, bin_ids=bin_ids)
+                        _ = self._call_bins(station_code=station.code, bin_ids=bin_ids)
                         logs.loc[len(logs)] = {
                             "time": current_time,
                             "station": station.code,
@@ -124,7 +124,7 @@ class JobService:
                         print(f"{current_time=}, {station.code=}, {bin_ids=} called")
 
                     # Check station status at intervals to see if a bin is at station
-                    station_status = self.check_station_status(station.code)
+                    station_status = self._check_station_status(station.code)
                     status_with_bin_at_station = next(
                         (
                             data_item
@@ -141,7 +141,7 @@ class JobService:
                     ):
                         # Store the bin at station back to matrix
                         bin_id = status_with_bin_at_station["code"]
-                        _ = self.store_bin(station_code=station.code, bin_id=bin_id)
+                        _ = self._store_bin(station_code=station.code, bin_id=bin_id)
                         logs.loc[len(logs)] = {
                             "time": current_time,
                             "station": station.code,
@@ -211,7 +211,10 @@ class JobService:
         }
         index_df.to_csv(data_dir / "index.csv", index=False)
 
-    def get_number_of_bins(self, station_type: str) -> int:
+        # Reset the layout to effectively stop everything after
+        _ = self._reset_layout()
+
+    def _get_number_of_bins(self, station_type: str) -> int:
         """
         Get the number of bins to call for a given station type.
 
@@ -243,7 +246,7 @@ class JobService:
 
         return number_of_bins
 
-    def get_bins_from_order(
+    def _get_bins_from_order(
         self,
         number_of_bins: int = 100,
         delay: float = 1.0,
@@ -299,14 +302,16 @@ class JobService:
                 "action": f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
             }
 
-        print(f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned")
+        print(
+            f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned"
+        )
 
         # Get bins from each layer
         bins = []
         for i, quantity in enumerate(number_of_bins_per_layer):
             if quantity > 0:
                 bins.extend(
-                    self.get_bins_from_layers(
+                    self._get_bins_from_layers(
                         quantity=quantity,
                         min_layer=i + 1,
                         max_layer=i + 1,
@@ -322,7 +327,7 @@ class JobService:
 
         return bins
 
-    def get_bins_from_layers(
+    def _get_bins_from_layers(
         self, quantity: int, min_layer: int, max_layer: int
     ) -> List[Dict[str, Any]]:
         """
@@ -348,7 +353,7 @@ class JobService:
             empty list is returned.
         """
         try:
-            response = self.send_request(
+            response = self._send_request(
                 url=f"{self.SM_BASE}/v3/storages/layer",
                 method="GET",
                 data={
@@ -362,7 +367,7 @@ class JobService:
         except requests.exceptions.RequestException as e:
             return []
 
-    def check_station_status(self, station_code: int) -> List[Dict[str, Any]]:
+    def _check_station_status(self, station_code: int) -> List[Dict[str, Any]]:
         """
         Check the status of the station.
 
@@ -378,13 +383,13 @@ class JobService:
             most two dictionaries, one indicates the bin at station and the other
             indicates the bin at gateway. If no bin is at station, the list is empty.
         """
-        response = self.send_request(
+        response = self._send_request(
             url=f"{self.SM_BASE}/v3/storages?stations={station_code}",
             method="GET",
         )
         return response.json()["data"]
 
-    def call_bins(self, station_code: int, bin_ids: List[int]) -> Dict[str, Any]:
+    def _call_bins(self, station_code: int, bin_ids: List[int]) -> Dict[str, Any]:
         """
         Call bins from matrix to the station.
 
@@ -400,14 +405,14 @@ class JobService:
         Dict[str, Any]
             The response from the server
         """
-        response = self.send_request(
+        response = self._send_request(
             url=f"{self.SM_BASE}/v3/operations/call",
             method="POST",
             data={"station": station_code, "storages": bin_ids},
         )
         return response.json()
 
-    def store_bin(self, station_code: int, bin_id: int) -> Dict[str, Any]:
+    def _store_bin(self, station_code: int, bin_id: int) -> Dict[str, Any]:
         """
         Store a bin at the station back to matrix.
 
@@ -423,7 +428,7 @@ class JobService:
         Dict[str, Any]
             The response from the server
         """
-        response = self.send_request(
+        response = self._send_request(
             url=f"{self.SM_BASE}/v3/operations/store",
             method="POST",
             data={
@@ -433,8 +438,22 @@ class JobService:
         )
         return response.json()
 
+    def _reset_layout(self) -> requests.Response:
+        """
+        Reset the layout of the simulation.
+
+        Returns
+        -------
+        requests.Response
+            The response from the server
+        """
+        response = self._send_request(
+            url=f"{self.SM_BASE}/v3/initialize/reset",
+        )
+        return response
+
     @staticmethod
-    def send_request(
+    def _send_request(
         url: str,
         method: str = "POST",
         data: Optional[Dict[str, Any]] = None,
