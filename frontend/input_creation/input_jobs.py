@@ -6,7 +6,6 @@ from core.parameters import Parameters
 from ui_components.grid_designer import GridDesignerUI
 from ui_components.simulation_input import SimulationInputUI
 
-SIMULATION_DURATION_IN_HOURS: int = 5
 
 
 class InputJobs:

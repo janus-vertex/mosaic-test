@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 class Configuration(BaseModel):
     name: str
-    start_time: str
     duration_in_seconds: int
     server_number: int
 

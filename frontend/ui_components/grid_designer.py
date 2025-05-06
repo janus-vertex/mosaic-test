@@ -141,7 +141,7 @@ class GridDesignerUI:
             "Upload a grid excel file for simulation. To get started, click below for "
             + "template or example, or refer to the instructions."
         )
-        
+
         # Update file paths to use absolute paths from project root
         files_dir = Path(__file__).parents[1] / "files"
         template_path = files_dir / "template.xlsx"
@@ -179,7 +179,8 @@ class GridDesignerUI:
                 """
                 Valid inputs are:
                 - Free stack: Any numeric value (e.g. 1, 2, 3)
-                - Stations: "P + station number + optional D/P" (e.g. P1, P1D, P1P)
+                - Stations: "P + station number + optional D/P + ends withO/I" (e.g. 
+                P1I, P21DI, P2PI, P3DO, P3PO) 
                 - Buffers: "B" 
                 - Others: Any other characters not defined above
                 - Unavailable stack: Left empty
@@ -193,21 +194,29 @@ class GridDesignerUI:
 
                 Stations are the cells that bins can be picked from and dropped into. 
                 They are cells that start with "P", and must follow the pattern 
-                "P + station number + optional D/P". 
+                "P + station number + optional D/P + O/I". The optional "D" or "P" 
+                indicates the station port is for drop or pick, while the last mandatory 
+                character "I" or "O" indicates the station is for inbound or outbound 
+                operation.
 
                 If the station is for both pick and drop, the optional D/P is not 
-                required. For example, "P1" and "P100".
+                required. For example, "P1O" and "P100I".
 
-                If the station is for pick only, then the suffix P is required. For 
-                example, "P2P", "P30P". Likewise, if the station is for drop only, then 
-                the suffix D is required. For example, "P2D", "P50D". 
-                
+                If the station is for pick only, then the character P is required. For 
+                example, "P2PI", "P30PO". Likewise, if the station is for drop only, then 
+                the character D is required. For example, "P2DI", "P50DO". 
+
                 Note that the pick and drop stations must come in pair. In other words, 
-                if "P1P" is created, then there must be "P1D", and vice versa.  
+                if "P1PI" is created, then there must be "P1DI", and vice versa.  
+
+                Each station must be assigned inbound "I" or outbound "O" as the last 
+                character. If the station has two ports, then both ports must have the 
+                same inbound or outbound character. For example, "P3DI" and "P3PI" are 
+                valid, but "P3DI" and "P3PO" are invalid.
 
                 No two stations can share the same station number, unless they are 
-                separate drop and pick stations. For example, if "P1" exists, then "P1D" 
-                or "P1P" is invalid, and vice versa.
+                separate drop and pick ports. For example, if "P1I" exists, then "P1DI" 
+                or "P1PI" is invalid, and vice versa. 
 
                 **3. Buffers**
 
@@ -237,64 +246,90 @@ class GridDesignerUI:
             True if the stations are valid, False otherwise.
         """
         # Find positions of all stations (cells starting with 'P')
-        station_positions = numpy.argwhere(
-            self.grid_data.map(lambda x: str(x).startswith("P")).to_numpy()
-        )
+        station_mask = self.grid_data.map(lambda x: str(x).startswith("P")).to_numpy()
+        station_positions = numpy.argwhere(station_mask)
         stations = self.grid_data.values[
             station_positions[:, 0], station_positions[:, 1]
         ].tolist()
 
-        # Check that all stations are unique
+        if not stations:
+            streamlit.error("No stations found in grid.", icon="❌")
+            return False
+
+        # Check for duplicates
         if len(stations) != len(set(stations)):
             streamlit.error("Duplicated station detected.", icon="❌")
             return False
 
-        # Check that all stations are in the correct format using regex pattern
-        pattern = r"^P\d+[DP]?$"
+        # Validate station format and group by station number
+        pattern = r"^P(\d+)([DP])?([IO])$"
+        station_groups = {}
+        has_inbound = has_outbound = False
+
         for station in stations:
-            if not re.match(pattern, str(station)):
+            match = re.match(pattern, str(station))
+            if not match:
                 streamlit.error(
                     f"Station {station} does not match required format (P + station "
-                    + "number + optional D/P).",
+                    + "number + optional D/P + ends with I/O).",
                     icon="❌",
                 )
                 return False
 
-        # Check that pick and drop stations match exactly
-        pick_base_stations = set(
-            station[:-1] for station in stations if station.endswith("P")
-        )
-        drop_base_stations = set(
-            station[:-1] for station in stations if station.endswith("D")
-        )
-        if pick_base_stations != drop_base_stations:
+            station_num, dp_type, io_type = match.groups()
+            if io_type == "I":
+                has_inbound = True
+            else:
+                has_outbound = True
+
+            if station_num not in station_groups:
+                station_groups[station_num] = {
+                    "stations": [],
+                    "io_type": io_type,
+                    "types": set(),
+                }
+            else:
+                # Check IO consistency within group
+                if station_groups[station_num]["io_type"] != io_type:
+                    streamlit.error(
+                        f"Station P{station_num} has mixed inbound/outbound ports. All ports "
+                        + "must be either all inbound or all outbound.",
+                        icon="❌",
+                    )
+                    return False
+
+            station_groups[station_num]["stations"].append(station)
+            station_groups[station_num]["types"].add(dp_type if dp_type else "mixed")
+
+        # Check for inbound/outbound presence
+        if not (has_inbound and has_outbound):
             streamlit.error(
-                "Each pick station must have a matching drop station with the same "
-                + "station number.",
+                "There must be at least one inbound and one outbound station.",
                 icon="❌",
             )
             return False
 
-        # Check that stations that do both drop and pick cannot share station numbers
-        # with pick/drop station pairs
-        mixed_base_stations = set(
-            station
-            for station in stations
-            if not (station.endswith("D") or station.endswith("P"))
-        )
-        if mixed_base_stations.intersection(
-            pick_base_stations
-        ) or mixed_base_stations.intersection(drop_base_stations):
-            streamlit.error(
-                "Stations that do both pick and drop cannot share station numbers with "
-                + "pick/drop station pairs.",
-                icon="❌",
-            )
-            return False
+        # Validate station type combinations
+        for station_num, group in station_groups.items():
+            types = group["types"]
+            if "mixed" in types and ("D" in types or "P" in types):
+                streamlit.error(
+                    "Stations that do both pick and drop cannot share station numbers with "
+                    + "pick/drop station pairs.",
+                    icon="❌",
+                )
+                return False
+            
+            # XOR check
+            if bool("D" in types) != bool("P" in types):  
+                streamlit.error(
+                    "Each pick station must have a matching drop station with the same "
+                    + "station number.",
+                    icon="❌",
+                )
+                return False
 
-        # Save the stations list if they are all valid
         self.stations: List[str] = stations
-
         return True
 
     def _display_grid(self):

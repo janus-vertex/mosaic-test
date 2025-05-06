@@ -2,15 +2,15 @@ import math
 from typing import List
 
 import streamlit
-
 from core.parameters import Parameters
 from input_creation.input_buffer import InputBuffer
+from input_creation.input_delay import InputDelay
 from input_creation.input_jobs import InputJobs
+from input_creation.input_simulation import InputSimulation
 from input_creation.input_skycar import InputSkyCarSetup
 from input_creation.input_sm_obstacles import InputSMObstacles
 from input_creation.input_tc_obstacles import InputTCObstacles
 from input_creation.input_zones import InputZonesAndStations
-from input_creation.input_delay import InputDelay
 from ui_components.grid_designer import GridDesignerUI
 from ui_components.simulation_input import SimulationInputUI
 
@@ -24,6 +24,15 @@ class SimulationPreparationUI:
 
     def show(self) -> bool:
         streamlit.write("## Simulation Preparation")
+
+        server_number = streamlit.selectbox(
+            "Choose a server to run the simulation on.",
+            [1, 2],
+            index=None,
+            placeholder="Select server...",
+        )
+        if server_number is None:
+            return False
 
         # Create input objects
         input_zones_and_stations = InputZonesAndStations(
@@ -40,8 +49,10 @@ class SimulationPreparationUI:
             simulation_input_ui=self.simulation_input_ui,
             input_zones_and_stations=input_zones_and_stations,
         )
-        input_jobs_list = self._create_input_jobs_list(
-            input_zones_and_stations=input_zones_and_stations
+        input_simulation = InputSimulation(
+            simulation_input_ui=self.simulation_input_ui,
+            grid_designer_ui=self.grid_designer_ui,
+            server_number=server_number,
         )
 
         # Option to show request files
@@ -83,24 +94,11 @@ class SimulationPreparationUI:
                     json_data=json_data, file_name="reset-delay.json"
                 )
 
-            for input_jobs in input_jobs_list:
-                with streamlit.expander(
-                    f"reset-job-{input_jobs.minLayer}.json: Job Parameters"
-                ):
-                    json_data = input_jobs.to_json()
-                    self._show_individual_json_file(
-                        json_data=json_data,
-                        file_name=f"reset-job-{input_jobs.minLayer}.json",
-                    )
-
-        server_number = streamlit.selectbox(
-            "Choose a server to run the simulation on.",
-            [1, 2],
-            index=None,
-            placeholder="Select server...",
-        )
-        if server_number is None:
-            return False
+            with streamlit.expander("reset-simulation.json: Simulation"):
+                json_data = input_simulation.to_json()
+                self._show_individual_json_file(
+                    json_data=json_data, file_name="reset-simulation.json"
+                )
 
         self.input_zones_and_stations = input_zones_and_stations
         self.input_sm_obstacles = input_sm_obstacles
@@ -108,7 +106,7 @@ class SimulationPreparationUI:
         self.input_skycar_setup = input_skycar_setup
         self.input_tc_obstacles = input_tc_obstacles
         self.input_delay = input_delay
-        self.input_jobs_list = input_jobs_list
+        self.input_simulation = input_simulation
         self.server_number = server_number
 
         return True
@@ -123,25 +121,3 @@ class SimulationPreparationUI:
         )
         streamlit.json(json_data)
 
-    def _create_input_jobs_list(
-        self, input_zones_and_stations: InputZonesAndStations
-    ) -> List[InputJobs]:
-        return [
-            InputJobs(
-                input_zones_and_stations=input_zones_and_stations,
-                min_layer=i,
-                max_layer=i,
-                quantity=math.ceil(
-                    len(input_zones_and_stations.stations)
-                    * (
-                        self.simulation_input_ui.goods_in_throughput
-                        + self.simulation_input_ui.pick_throughput
-                    )
-                    * self.simulation_input_ui.simulation_duration
-                    * self.simulation_input_ui.order_line_distribution_probabilities[
-                        i - 1
-                    ]
-                ),
-            )
-            for i in range(1, self.grid_designer_ui.z_size + 1)
-        ]

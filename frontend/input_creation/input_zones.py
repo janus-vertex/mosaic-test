@@ -4,7 +4,7 @@ import json
 from typing import List
 
 import numpy
-
+from core.exception import SimulationFrontendException
 from core.parameters import Parameters
 from ui_components.grid_designer import GridDesignerUI
 
@@ -81,7 +81,7 @@ class InputZonesAndStations:
             start_z = 1
 
         else:
-            raise NotImplementedError(f"Void type {void_type} not implemented")
+            raise SimulationFrontendException(f"Void type {void_type} not implemented")
 
         rows, cols = void_mask.shape
         voids = []
@@ -143,7 +143,7 @@ class InputZonesAndStations:
             y, x = numpy.argwhere(grid_data_array == grid_station)[0].tolist()
             station_number = int("".join(filter(str.isdigit, grid_station)))
 
-            if not grid_station.endswith("D") and not grid_station.endswith("P"):
+            if grid_station[-2] not in ["D", "P"]:
                 drop = InputDropOrPick(
                     coordinates=Coordinates(x=x, y=y, z=station_height), capacity=2
                 )
@@ -153,7 +153,7 @@ class InputZonesAndStations:
                 station = InputStation(code=station_number, drop=drop, pick=pick)
                 stations.append(station)
             else:
-                if grid_station.endswith("D"):
+                if grid_station[-2] == "D":
                     drop = InputDropOrPick(
                         coordinates=Coordinates(x=x, y=y, z=station_height), capacity=2
                     )

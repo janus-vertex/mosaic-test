@@ -1,10 +1,16 @@
-import json
-
 import requests
 import streamlit
-from core.config import SM_BASE_1, SM_BASE_2, TC_BASE_1, TC_BASE_2
-from frontend.core.simulation_requests import MosaicRequest
+from core.config import (
+    SIMULATION_BASE_1,
+    SIMULATION_BASE_2,
+    SM_BASE_1,
+    SM_BASE_2,
+    TC_BASE_1,
+    TC_BASE_2,
+)
 from ui_components.simulation_preparation import SimulationPreparationUI
+
+from frontend.core.simulation_requests import MosaicRequest
 
 
 class Simulator:
@@ -24,7 +30,7 @@ class Simulator:
 
         if is_simulation_running:
             streamlit.warning(
-                f"Simulation {simulation_id} is running. Please stop it before running "
+                "A simulation is running. Please stop it before running "
                 + "another one by pressing the stop button at the top of the page.",
                 icon="⚠️",
             )
@@ -39,7 +45,7 @@ class Simulator:
             ("Configure Skycar Setup", self._configure_skycar_setup),
             ("Start Cube", self._start_cube),
             ("Set Time Delay", self._set_delay),
-            # ("Send Jobs", self._send_list_of_jobs),
+            ("Start Simulation", self._start_simulation),
         ]
 
         progress_bar = streamlit.progress(0)
@@ -50,7 +56,7 @@ class Simulator:
             _ = step_func()
             progress_bar.progress((i + 1) / len(steps))
 
-        status_text.text("Simulation setup complete!")
+        status_text.text(f"Simulation {simulation_id} started successfully!")
 
     def stop(self) -> requests.Response | None:
         try:
@@ -74,9 +80,11 @@ class Simulator:
         if self.simulation_preparation_ui.server_number == 1:
             self.SM_BASE = SM_BASE_1
             self.TC_BASE = TC_BASE_1
+            self.SIMULATION_BASE = SIMULATION_BASE_1
         elif self.simulation_preparation_ui.server_number == 2:
             self.SM_BASE = SM_BASE_2
             self.TC_BASE = TC_BASE_2
+            self.SIMULATION_BASE = SIMULATION_BASE_2
 
     def _reset_layout(self) -> requests.Response:
         response = MosaicRequest.send_request(
@@ -135,9 +143,10 @@ class Simulator:
         )
         return response
 
-    def _send_list_of_jobs(self) -> requests.Response:
-        for input_jobs in self.simulation_preparation_ui.input_jobs_list:
-            _ = MosaicRequest.send_request(
-                url=f"{self.SM_BASE}/v3/dry-runs",
-                data=input_jobs.to_json(type="dict"),
-            )
+    def _start_simulation(self) -> requests.Response:
+        response = MosaicRequest.send_request(
+            url=f"{self.SIMULATION_BASE}/jobs/create",
+            method="POST",
+            data=self.simulation_preparation_ui.input_simulation.to_json(type="dict"),
+        )
+        return response

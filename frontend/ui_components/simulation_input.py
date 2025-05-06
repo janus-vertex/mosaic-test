@@ -35,14 +35,14 @@ class SimulationInputUI:
             ],
         )
         duration_mapping = {
-            "10 minutes": 1 / 6,
-            "30 minutes": 1 / 2,
-            "1 hour": 1,
-            "2 hours": 2,
-            "4 hours": 4,
-            "8 hours": 8,
+            "10 minutes": 600,
+            "30 minutes": 1800,
+            "1 hour": 3600,
+            "2 hours": 7200,
+            "4 hours": 14400,
+            "8 hours": 28800,
         }
-        simulation_duration = duration_mapping[simulation_duration]
+        simulation_duration_in_seconds = duration_mapping[simulation_duration]
 
         streamlit.write("#### Peak throughput per station")
         col1, col2 = streamlit.columns(2)
@@ -110,7 +110,7 @@ class SimulationInputUI:
         self.pick_time = pick_time
         self.goods_in_time = goods_in_time
         self.number_of_skycars = number_of_skycars
-        self.simulation_duration = simulation_duration
+        self.simulation_duration_in_seconds = simulation_duration_in_seconds
         self.simulation_name = simulation_name
 
         streamlit.divider()
