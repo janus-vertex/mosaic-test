@@ -64,27 +64,17 @@ class MosaicRequest:
         return is_healthy, is_simulation_running, is_simulation_completed, simulation_id
 
     @staticmethod
-    def health_check(TC_base: str, SM_base: str) -> bool | None:
+    def stop(TC_base: str, simulation_base: str) -> None:
         try:
-            tc_response = MosaicRequest.send_request(
-                url=f"{TC_base}/operation/healthcheck", method="GET", timeout=1
-            )
-            tc_real_response = json.loads(tc_response.text)
-
-            sm_response = MosaicRequest.send_request(
-                url=f"{SM_base}/v3/settings/OrderDispatcher", method="GET", timeout=1
-            )
-            sm_real_response = json.loads(sm_response.text)
-            return (
-                tc_real_response["model"]["cycle_stop"]["status"]
-                and sm_real_response["data"]["value"][Parameters.ZONE_NAME]["isActive"]
-            )
-
+            _ = MosaicRequest.tc_stop(TC_base)
+            _ = MosaicRequest.simulation_stop(simulation_base)
+            streamlit.success("Simulation stopped successfully.", icon="✅")
+            return None
         except requests.exceptions.RequestException as _:
             return None
 
     @staticmethod
-    def stop(TC_base: str) -> requests.Response | None:
+    def tc_stop(TC_base: str) -> requests.Response | None:
         try:
             response = MosaicRequest.send_request(
                 url=f"{TC_base}/operation/cyclestop",
@@ -93,11 +83,25 @@ class MosaicRequest:
                     "reason": "Matrix simulation has stopped the simulation.",
                 },
             )
-            streamlit.success("Simulation stopped successfully.", icon="✅")
             return response
         except requests.exceptions.RequestException as _:
             streamlit.warning(
-                "Failed to stop simulation, or there is no simulation to be stopped.",
+                "Failed to stop TC, or there is no job queue to be stopped.",
+                icon="⚠️",
+            )
+            return None
+
+    @staticmethod
+    def simulation_stop(simulation_base: str) -> requests.Response | None:
+        try:
+            response = MosaicRequest.send_request(
+                url=f"{simulation_base}/jobs/stop",
+                method="POST",
+            )
+            return response
+        except requests.exceptions.RequestException as _:
+            streamlit.warning(
+                "Failed to stop simulation, or there is no job creation to be stopped.",
                 icon="⚠️",
             )
             return None
