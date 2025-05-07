@@ -1,0 +1,115 @@
+import json
+from typing import List
+
+from ui_components.simulation_input import SimulationInputUI
+from ui_components.grid_designer import GridDesignerUI
+from core.exception import SimulationFrontendException
+
+
+class InputSimulation:
+    def __init__(
+        self,
+        simulation_input_ui: SimulationInputUI,
+        grid_designer_ui: GridDesignerUI,
+        server_number: int,
+    ):
+        self._create_parameters(simulation_input_ui=simulation_input_ui)
+        self._create_configuration(
+            simulation_input_ui=simulation_input_ui,
+            server_number=server_number,
+        )
+        self._create_stations(grid_designer_ui=grid_designer_ui)
+
+    def _create_parameters(self, simulation_input_ui: SimulationInputUI):
+        self.parameters = InputParameters(
+            pick_time=simulation_input_ui.pick_time,
+            goods_in_time=simulation_input_ui.goods_in_time,
+            pick_throughput=simulation_input_ui.pick_throughput,
+            goods_in_throughput=simulation_input_ui.goods_in_throughput,
+            pareto_probabilities=simulation_input_ui.order_line_distribution_probabilities,
+        )
+
+    def _create_configuration(
+        self,
+        simulation_input_ui: SimulationInputUI,
+        server_number: int,
+    ):
+        self.configuration = InputConfiguration(
+            name=simulation_input_ui.simulation_name,
+            duration_in_seconds=simulation_input_ui.simulation_duration_in_seconds,
+            server_number=server_number,
+        )
+
+    def _create_stations(self, grid_designer_ui: GridDesignerUI):
+        stations: List[InputStation] = []
+        for grid_station in grid_designer_ui.stations:
+            code = int("".join(filter(str.isdigit, grid_station)))
+            last_character = grid_station[-1]
+            if last_character not in ["I", "O"]:
+                raise SimulationFrontendException(
+                    f"Invalid station type: {grid_station}"
+                )
+
+            # Check if the station code is already in the list to avoid duplicates
+            if any(
+                station.code == code and station.type == last_character
+                for station in stations
+            ):
+                continue
+
+            stations.append(InputStation(code=code, type_=last_character))
+
+        self.stations = stations
+
+    def to_json(
+        self,
+        save: bool = False,
+        filename: str = "reset-simulation.json",
+        type: str = "str",
+    ) -> str:
+        json_str = json.dumps(
+            self, default=lambda o: o.__dict__, sort_keys=True, indent=4
+        )
+
+        if save:
+            with open(filename, "w") as file:
+                file.write(json_str)
+
+        if type == "str":
+            return json_str
+        elif type == "dict":
+            return json.loads(json_str)
+
+
+class InputParameters:
+    def __init__(
+        self,
+        pick_time: int,
+        goods_in_time: int,
+        pick_throughput: int,
+        goods_in_throughput: int,
+        pareto_probabilities: List[float],
+    ):
+        self.pick_time = pick_time
+        self.goods_in_time = goods_in_time
+        self.pick_throughput = pick_throughput
+        self.goods_in_throughput = goods_in_throughput
+        self.pareto_probabilities = pareto_probabilities
+
+
+class InputConfiguration:
+    def __init__(
+        self,
+        name: str,
+        duration_in_seconds: int,
+        server_number: int,
+    ):
+        self.name = name
+        self.duration_in_seconds = duration_in_seconds
+        self.server_number = server_number
+
+
+class InputStation:
+    def __init__(self, code: int, type_: str):
+        self.code = code
+        self.type = type_

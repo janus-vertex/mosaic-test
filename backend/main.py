@@ -1,21 +1,13 @@
+import time
 from datetime import datetime
 
 from fastapi import BackgroundTasks, Body, FastAPI
-from job_service import JobService
-from pydantic import BaseModel
+from job_service import JobsCreationRequest, JobService
 
 app = FastAPI()
 
 # Add this at the top level of the file
-job_creation_status = {"is_successful": False}
-
-
-class JobsCreationRequest(BaseModel):
-    pick_time: int
-    goods_in_time: int
-    pick_throughput: int
-    goods_in_throughput: int
-    number_of_jobs: int
+job_creation_status = {"start_time": None, "stop_requested": False, "stop_time": None}
 
 
 @app.get("/time")
@@ -29,29 +21,32 @@ async def get_status():
     return job_creation_status
 
 
+@app.post("/jobs/stop")
+async def stop_jobs():
+    job_creation_status["stop_requested"] = True
+    return {"message": "Job creation process has been stopped"}
+
+
 @app.post("/jobs/create")
 async def create_jobs(
     background_tasks: BackgroundTasks,
     jobs_creation_request: JobsCreationRequest = Body(...),
 ):
     # Reset the status before starting new job creation
-    job_creation_status["is_successful"] = False
+    job_creation_status["start_time"] = None
+    job_creation_status["stop_requested"] = False
+    job_creation_status["stop_time"] = None
 
     job_service = JobService(
-        pick_time=jobs_creation_request.pick_time,
-        goods_in_time=jobs_creation_request.goods_in_time,
-        pick_throughput=jobs_creation_request.pick_throughput,
-        goods_in_throughput=jobs_creation_request.goods_in_throughput,
+        jobs_creation_request=jobs_creation_request,
+        job_creation_status=job_creation_status,
     )
 
-    def create_jobs_and_update_status(number_of_jobs: int):
-        job_service.create_jobs(number_of_jobs=number_of_jobs)
-        job_creation_status["is_successful"] = True
+    def create_jobs_and_update_status():        
+        job_creation_status["start_time"] = time.time()
+        job_service.create_jobs()
 
-    background_tasks.add_task(
-        create_jobs_and_update_status,
-        number_of_jobs=jobs_creation_request.number_of_jobs,
-    )
+    background_tasks.add_task(create_jobs_and_update_status)
 
     return {"message": "Job creation process has been started"}
 

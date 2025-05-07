@@ -1,0 +1,7 @@
+time,station,bin_id,action
+1745737133.1269593,,,Simulation start
+1745737134.1419227,1,,19 bins called
+1745737134.1419227,2,,26 bins called
+1745737217.3149736,2,2782,Bin stored
+1745737224.1720786,1,2776,Bin stored
+1745737233.2873774,,,Simulation end

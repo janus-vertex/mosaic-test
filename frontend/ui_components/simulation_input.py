@@ -19,10 +19,21 @@ class SimulationInputUI:
         streamlit.write("## Simulation Input")
 
         streamlit.write("#### General settings")
+        is_success = True
         col1, col2 = streamlit.columns(2)
         simulation_name = col1.text_input(
-            "Simulation name (default name is given if left blank)", value=""
+            "Simulation name (default name is given if left blank)", value="default-sim"
         )
+        # Validate simulation name - only alphanumeric characters, dashes, and underscores allowed
+        if simulation_name == "" or not all(
+            c.isalnum() or c in ["-", "_"] for c in simulation_name
+        ):
+            streamlit.error(
+                "Simulation name must contain only alphanumeric characters, dashes, or underscores.",
+                icon=f"❌",
+            )
+            is_success = False
+
         simulation_duration = col2.selectbox(
             "Approximate simulation duration",
             options=[
@@ -35,22 +46,22 @@ class SimulationInputUI:
             ],
         )
         duration_mapping = {
-            "10 minutes": 1 / 6,
-            "30 minutes": 1 / 2,
-            "1 hour": 1,
-            "2 hours": 2,
-            "4 hours": 4,
-            "8 hours": 8,
+            "10 minutes": 600,
+            "30 minutes": 1800,
+            "1 hour": 3600,
+            "2 hours": 7200,
+            "4 hours": 14400,
+            "8 hours": 28800,
         }
-        simulation_duration = duration_mapping[simulation_duration]
+        simulation_duration_in_seconds = duration_mapping[simulation_duration]
 
         streamlit.write("#### Peak throughput per station")
         col1, col2 = streamlit.columns(2)
         pick_throughput = col1.number_input(
-            "Pick throughput (bins/h)", min_value=1, value=1000
+            "Pick (outbound) throughput (bins/h)", min_value=1, value=100
         )
         goods_in_throughput = col2.number_input(
-            "Goods-in throughput (bins/h)", min_value=1, value=100
+            "Goods-in (inbound) throughput (bins/h)", min_value=1, value=100
         )
 
         recommended_number_of_skycars = self._recommend_number_of_skycars(
@@ -110,12 +121,12 @@ class SimulationInputUI:
         self.pick_time = pick_time
         self.goods_in_time = goods_in_time
         self.number_of_skycars = number_of_skycars
-        self.simulation_duration = simulation_duration
+        self.simulation_duration_in_seconds = simulation_duration_in_seconds
         self.simulation_name = simulation_name
 
         streamlit.divider()
 
-        return True
+        return is_success
 
     def _recommend_number_of_skycars(self, total_throughput: int):
         """

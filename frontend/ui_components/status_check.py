@@ -1,6 +1,13 @@
 import streamlit
+from core.config import (
+    SIMULATION_BASE_1,
+    SIMULATION_BASE_2,
+    SM_BASE_1,
+    SM_BASE_2,
+    TC_BASE_1,
+    TC_BASE_2,
+)
 
-from core.config import TC_BASE_1, TC_BASE_2, SM_BASE_1, SM_BASE_2
 from frontend.core.simulation_requests import MosaicRequest
 
 
@@ -14,14 +21,22 @@ class StatusCheckUI:
         col1, col2 = streamlit.columns(2)
         with col1:
             streamlit.write("Server 1")
-            self.check_if_simulation_is_running(TC_base=TC_BASE_1, SM_base=SM_BASE_1)
+            self.check_if_simulation_is_running(
+                TC_base=TC_BASE_1, SM_base=SM_BASE_1, simulation_base=SIMULATION_BASE_1
+            )
         with col2:
             streamlit.write("Server 2")
-            self.check_if_simulation_is_running(TC_base=TC_BASE_2, SM_base=SM_BASE_2)
+            self.check_if_simulation_is_running(
+                TC_base=TC_BASE_2, SM_base=SM_BASE_2, simulation_base=SIMULATION_BASE_2
+            )
 
-    def check_if_simulation_is_running(self, TC_base: str, SM_base: str):
+    def check_if_simulation_is_running(
+        self, TC_base: str, SM_base: str, simulation_base: str
+    ):
         is_healthy, is_simulation_running, is_simulation_completed, simulation_id = (
-            MosaicRequest.general_check(TC_base=TC_base, SM_base=SM_base)
+            MosaicRequest.general_check(
+                TC_base=TC_base, SM_base=SM_base, simulation_base=simulation_base
+            )
         )
 
         if not is_healthy:
@@ -29,18 +44,14 @@ class StatusCheckUI:
 
         elif is_simulation_running:
             if is_simulation_completed:
-                streamlit.success(
-                    f"Simulation {simulation_id} completed successfully!"
-                )
+                streamlit.success(f"Simulation {simulation_id} completed successfully!")
             else:
-                streamlit.success(
-                    f"Simulation {simulation_id} is running."
-                )
+                streamlit.success(f"Simulation {simulation_id} is running.")
             is_stop_simulation = streamlit.button(
                 "Stop Simulation", key=f"{TC_base} stop button"
             )
             if is_stop_simulation:
-                MosaicRequest.stop(TC_base)
+                MosaicRequest.stop(TC_base=TC_base, simulation_base=simulation_base)
 
         elif is_simulation_running is False:
             streamlit.success("No simulation is running.")

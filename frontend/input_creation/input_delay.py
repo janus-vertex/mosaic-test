@@ -10,11 +10,11 @@ class InputDelay:
         simulation_input_ui: SimulationInputUI,
         input_zones_and_stations: InputZonesAndStations,
     ):
-        self.action = "ENABLE"
+        self.action = "DISABLE"
         self.stations = self._get_list_of_stations(
             input_zones_and_stations=input_zones_and_stations
         )
-        self.delay = simulation_input_ui.goods_in_time + simulation_input_ui.pick_time
+        # self.delay = simulation_input_ui.goods_in_time + simulation_input_ui.pick_time
 
     def _get_list_of_stations(
         self, input_zones_and_stations: InputZonesAndStations

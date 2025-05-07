@@ -1,0 +1,2 @@
+class SimulationFrontendException(Exception):
+    pass
