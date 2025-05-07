@@ -19,10 +19,21 @@ class SimulationInputUI:
         streamlit.write("## Simulation Input")
 
         streamlit.write("#### General settings")
+        is_success = True
         col1, col2 = streamlit.columns(2)
         simulation_name = col1.text_input(
-            "Simulation name (default name is given if left blank)", value=""
+            "Simulation name (default name is given if left blank)", value="default-sim"
         )
+        # Validate simulation name - only alphanumeric characters, dashes, and underscores allowed
+        if simulation_name == "" or not all(
+            c.isalnum() or c in ["-", "_"] for c in simulation_name
+        ):
+            streamlit.error(
+                "Simulation name must contain only alphanumeric characters, dashes, or underscores.",
+                icon=f"❌",
+            )
+            is_success = False
+
         simulation_duration = col2.selectbox(
             "Approximate simulation duration",
             options=[
@@ -115,7 +126,7 @@ class SimulationInputUI:
 
         streamlit.divider()
 
-        return True
+        return is_success
 
     def _recommend_number_of_skycars(self, total_throughput: int):
         """
