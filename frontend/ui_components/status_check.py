@@ -34,7 +34,9 @@ class StatusCheckUI:
         self, TC_base: str, SM_base: str, simulation_base: str
     ):
         is_healthy, is_simulation_running, is_simulation_completed, simulation_id = (
-            MosaicRequest.general_check(TC_base=TC_base, SM_base=SM_base)
+            MosaicRequest.general_check(
+                TC_base=TC_base, SM_base=SM_base, simulation_base=simulation_base
+            )
         )
 
         if not is_healthy:

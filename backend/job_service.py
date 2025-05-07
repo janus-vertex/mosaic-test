@@ -2,14 +2,17 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy
 import pandas
 import requests
 from exception import SimulationBackendException
 from job_request import JobsCreationRequest
-import numpy
 
 SM_BASE_1 = "http://18.138.163.62:3020"
+TC_BASE_1 = "http://13.228.83.247:3030"
+
 SM_BASE_2 = "http://18.138.163.62:3120/"
+TC_BASE_2 = "http://13.228.83.247:3033/"
 
 
 class Station:
@@ -211,8 +214,8 @@ class JobService:
         }
         index_df.to_csv(data_dir / "index.csv", index=False)
 
-        # Reset the layout to effectively stop everything after
-        _ = self._reset_layout()
+        # Stop TC to effectively stop everything
+        _ = self._tc_stop()
 
     def _get_number_of_bins(self, station_type: str) -> int:
         """
@@ -438,17 +441,13 @@ class JobService:
         )
         return response.json()
 
-    def _reset_layout(self) -> requests.Response:
-        """
-        Reset the layout of the simulation.
-
-        Returns
-        -------
-        requests.Response
-            The response from the server
-        """
+    def _tc_stop(self) -> requests.Response | None:
         response = self._send_request(
-            url=f"{self.SM_BASE}/v3/initialize/reset",
+            url=f"{self.TC_BASE}/operation/cyclestop",
+            data={
+                "status": "Enabled",
+                "reason": "Matrix simulation has stopped the simulation.",
+            },
         )
         return response
 
@@ -515,5 +514,7 @@ class JobService:
         """
         if self.body.configuration.server_number == 1:
             self.SM_BASE = SM_BASE_1
+            self.TC_BASE = TC_BASE_1
         elif self.body.configuration.server_number == 2:
             self.SM_BASE = SM_BASE_2
+            self.TC_BASE = TC_BASE_2

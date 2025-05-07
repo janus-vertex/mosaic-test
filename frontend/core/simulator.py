@@ -20,7 +20,9 @@ class Simulator:
 
     def run(self):
         is_healthy, is_simulation_running, _, simulation_id = (
-            MosaicRequest.general_check(TC_base=self.TC_BASE, SM_base=self.SM_BASE)
+            MosaicRequest.general_check(
+                TC_base=self.TC_BASE, SM_base=self.SM_BASE, simulation_base=self.SIMULATION_BASE
+            )
         )
         if not is_healthy:
             streamlit.warning(

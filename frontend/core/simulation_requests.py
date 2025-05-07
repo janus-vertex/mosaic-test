@@ -52,16 +52,38 @@ class MosaicRequest:
             return is_healthy, None, None, None
 
     @staticmethod
+    def backend_status_check(simulation_base: str) -> Tuple[bool, bool | None]:
+        try:
+            response = MosaicRequest.send_request(
+                url=f"{simulation_base}/status",
+                method="GET",
+            )
+            real_response = json.loads(response.text)
+            is_simulation_completed = (
+                True if real_response["stop_time"] is not None else False
+            )
+            is_healthy = True
+            return is_healthy, is_simulation_completed
+        except requests.exceptions.RequestException as _:
+            is_healthy = False
+            return is_healthy, None
+
+    @staticmethod
     def general_check(
-        TC_base: str, SM_base: str
+        TC_base: str, SM_base: str, simulation_base: str
     ) -> Tuple[bool, bool | None, bool | None, str | None]:
         is_sm_healthy = MosaicRequest.SM_health_check(SM_base)
-        is_tc_healthy, is_simulation_running, is_simulation_completed, simulation_id = (
+        is_tc_healthy, is_tc_running, is_tc_completed, simulation_id = (
             MosaicRequest.TC_status_check(TC_base)
         )
-        is_healthy = is_sm_healthy and is_tc_healthy
+        is_backend_healthy, is_backend_simulation_completed = (
+            MosaicRequest.backend_status_check(simulation_base)
+        )
 
-        return is_healthy, is_simulation_running, is_simulation_completed, simulation_id
+        is_healthy = is_sm_healthy and is_tc_healthy and is_backend_healthy
+        is_simulation_completed = is_tc_completed or is_backend_simulation_completed
+
+        return is_healthy, is_tc_running, is_simulation_completed, simulation_id
 
     @staticmethod
     def stop(TC_base: str, simulation_base: str) -> None:
