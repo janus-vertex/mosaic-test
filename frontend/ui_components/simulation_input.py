@@ -55,17 +55,28 @@ class SimulationInputUI:
         }
         simulation_duration_in_seconds = duration_mapping[simulation_duration]
 
-        streamlit.write("#### Peak throughput per station")
+        streamlit.write("#### Peak number of bins per order")
         col1, col2 = streamlit.columns(2)
-        pick_throughput = col1.number_input(
-            "Pick (outbound) throughput (bins/h)", min_value=1, value=100
+        inbound_bins_per_order = col1.number_input(
+            "Inbound bins per order", min_value=1, value=20, max_value=100
         )
-        goods_in_throughput = col2.number_input(
-            "Goods-in (inbound) throughput (bins/h)", min_value=1, value=100
+        outbound_bins_per_order = col2.number_input(
+            "Outbound bins per order", min_value=1, value=20, max_value=100
         )
 
+        streamlit.write("#### Peak number of orders per hour")
+        col1, col2 = streamlit.columns(2)
+        inbound_orders_per_hour = col1.number_input(
+            "Inbound orders per hour", min_value=1, value=10, max_value=100
+        )
+        outbound_orders_per_hour = col2.number_input(
+            "Outbound orders per hour", min_value=1, value=10, max_value=100
+        )
+
+        inbound_throughput = inbound_orders_per_hour * inbound_bins_per_order
+        outbound_throughput = outbound_orders_per_hour * outbound_bins_per_order
         recommended_number_of_skycars = self._recommend_number_of_skycars(
-            total_throughput=pick_throughput + goods_in_throughput
+            total_throughput=inbound_throughput + outbound_throughput
         )
         streamlit.write("#### Number of skycars")
         col1, col2 = streamlit.columns(2)
@@ -83,23 +94,25 @@ class SimulationInputUI:
 
         streamlit.write("#### Operator handling times")
         col1, col2 = streamlit.columns(2)
-        pick_time = col1.number_input("Pick handling time (s)", min_value=1, value=20)
-        goods_in_time = col2.number_input(
-            "Goods-in handling time (s)", min_value=1, value=20
+        inbound_time = col1.number_input(
+            "Inbound handling time (s)", min_value=1, value=20
+        )
+        outbound_time = col2.number_input(
+            "Outbound handling time (s)", min_value=1, value=20
         )
 
-        streamlit.write("#### Order line distribution")
+        streamlit.write("#### Bin distribution")
         with streamlit.expander("More information"):
             streamlit.write(
                 """ 
-                The order line distribution is based on generalised truncated Pareto 
+                The bin distribution is based on generalised truncated Pareto 
                 distribution. Input `p` and `q`, such that `q%` of SKUs contribute 
                 to `p%` of the job volume (note the order of `p` and `q`). This is also 
-                equivalent to `p%` of order lines contribute to top `q%` of the layers 
+                equivalent to `p%` of bins contribute to top `q%` of the layers 
                 in the grid.
 
                 For example, the standard 80/20 rule implies that 20% of the SKUs
-                contribute to 80% of the job volume. Equivalently, 80% of the order lines
+                contribute to 80% of the job volume. Equivalently, 80% of the bins
                 contribute to the top 20% of the layers in the grid. In this example,
                 `p = 80` and `q = 20`.
                 """
@@ -113,13 +126,13 @@ class SimulationInputUI:
             col2.number_input("q (%)", min_value=0, max_value=100, value=20) / 100
         )
 
-        self._show_order_line_distribution_plot(pareto_p, pareto_q)
+        self._show_bin_distribution_plot(pareto_p, pareto_q)
 
         # Assign values for later use
-        self.pick_throughput = pick_throughput
-        self.goods_in_throughput = goods_in_throughput
-        self.pick_time = pick_time
-        self.goods_in_time = goods_in_time
+        self.inbound_bins_per_order = inbound_bins_per_order
+        self.outbound_bins_per_order = outbound_bins_per_order
+        self.inbound_time = inbound_time
+        self.outbound_time = outbound_time
         self.number_of_skycars = number_of_skycars
         self.simulation_duration_in_seconds = simulation_duration_in_seconds
         self.simulation_name = simulation_name
@@ -130,12 +143,12 @@ class SimulationInputUI:
 
     def _recommend_number_of_skycars(self, total_throughput: int):
         """
-        Recommend the number of skycars based on the pick and goods-in throughputs. One
+        Recommend the number of skycars based on the inbound and outbound throughputs. One
         robot can roughly handle 25 bins per hour.
         """
         return math.ceil(total_throughput / 25)
 
-    def _show_order_line_distribution_plot(self, pareto_p: float, pareto_q: float):
+    def _show_bin_distribution_plot(self, pareto_p: float, pareto_q: float):
         z_size = self.grid_designer_ui.z_size
         if z_size is None:
             return
@@ -149,7 +162,8 @@ class SimulationInputUI:
         ]
         top_x0_sum = sum(probabilities_percent[: int(x0)])
         streamlit.info(
-            f"{top_x0_sum:.1f}% of the order lines go into the top {int(x0)} layer(s).",
+            f"{top_x0_sum:.1f}% of the bins go into the top {int(x0)} "
+            + f"({x0/z_size*100:.1f}%) layer(s).",
         )
 
         fig = go.Figure(
@@ -162,7 +176,7 @@ class SimulationInputUI:
         )
 
         fig.update_layout(
-            title="Order Line Distribution by Position of Layer",
+            title="Bin Distribution by Position of Layer",
             xaxis_title="Position of Layer",
             yaxis_title="Probability of layer (%)",
             showlegend=False,
@@ -176,6 +190,4 @@ class SimulationInputUI:
 
         streamlit.plotly_chart(fig)
 
-        self.order_line_distribution_probabilities = [
-            i / 100 for i in probabilities_percent
-        ]
+        self.pareto_probabilities = [i / 100 for i in probabilities_percent]

@@ -22,11 +22,11 @@ class InputSimulation:
 
     def _create_parameters(self, simulation_input_ui: SimulationInputUI):
         self.parameters = InputParameters(
-            pick_time=simulation_input_ui.pick_time,
-            goods_in_time=simulation_input_ui.goods_in_time,
-            pick_throughput=simulation_input_ui.pick_throughput,
-            goods_in_throughput=simulation_input_ui.goods_in_throughput,
-            pareto_probabilities=simulation_input_ui.order_line_distribution_probabilities,
+            inbound_time=simulation_input_ui.inbound_time,
+            outbound_time=simulation_input_ui.outbound_time,
+            inbound_bins_per_order=simulation_input_ui.inbound_bins_per_order,
+            outbound_bins_per_order=simulation_input_ui.outbound_bins_per_order,
+            pareto_probabilities=simulation_input_ui.pareto_probabilities,
         )
 
     def _create_configuration(
@@ -84,16 +84,16 @@ class InputSimulation:
 class InputParameters:
     def __init__(
         self,
-        pick_time: int,
-        goods_in_time: int,
-        pick_throughput: int,
-        goods_in_throughput: int,
+        inbound_time: int,
+        outbound_time: int,
+        inbound_bins_per_order: int,
+        outbound_bins_per_order: int,
         pareto_probabilities: List[float],
     ):
-        self.pick_time = pick_time
-        self.goods_in_time = goods_in_time
-        self.pick_throughput = pick_throughput
-        self.goods_in_throughput = goods_in_throughput
+        self.inbound_time = inbound_time
+        self.outbound_time = outbound_time
+        self.inbound_bins_per_order = inbound_bins_per_order
+        self.outbound_bins_per_order = outbound_bins_per_order
         self.pareto_probabilities = pareto_probabilities
 
 
