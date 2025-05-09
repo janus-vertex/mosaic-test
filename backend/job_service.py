@@ -106,7 +106,7 @@ class JobService:
                     # If there are no more bins for the station, find new bins and call
                     # them from the matrix
                     if len(station.bins) == 0:
-                        number_of_bins = self._get_number_of_bins(
+                        number_of_bins = self._get_number_of_bins_per_order(
                             station_type=station.type
                         )
                         station.bins = self._get_bins_from_order(
@@ -156,9 +156,9 @@ class JobService:
 
                         # Add delay to the next job time
                         delay = (
-                            self.body.parameters.goods_in_time
+                            self.body.parameters.inbound_time
                             if station.type == "I"
-                            else self.body.parameters.pick_time
+                            else self.body.parameters.outbound_time
                         )
                         station.next_job_time = current_time + delay
 
@@ -217,9 +217,11 @@ class JobService:
         # Stop TC to effectively stop everything
         _ = self._tc_stop()
 
-    def _get_number_of_bins(self, station_type: str) -> int:
+    def _get_number_of_bins_per_order(self, station_type: str) -> int:
         """
-        Get the number of bins to call for a given station type.
+        Get the number of bins per order to call for a given station type. We assume 
+        this number given is the peak number of bins per order, so the simulation is
+        always simulating the busiest scenario.
 
         Parameters
         ----------
@@ -237,17 +239,13 @@ class JobService:
             The number of bins to call for the given station type
         """
         if station_type == "I":
-            average_number_of_bins = self.body.parameters.goods_in_throughput
+            number_of_bins_per_order = self.body.parameters.inbound_bins_per_order
         elif station_type == "O":
-            average_number_of_bins = self.body.parameters.pick_throughput
+            number_of_bins_per_order = self.body.parameters.outbound_bins_per_order
         else:
             raise SimulationBackendException(f"Invalid station type: {station_type}")
 
-        # TODO: Use Gaussian distribution to get the number of bins, instead of dividing
-        # by 2
-        number_of_bins = max(int(average_number_of_bins / 2), 1)
-
-        return number_of_bins
+        return number_of_bins_per_order
 
     def _get_bins_from_order(
         self,

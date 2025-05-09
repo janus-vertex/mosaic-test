@@ -202,11 +202,11 @@ class GridDesignerUI:
                 If the station is for both pick and drop, the optional D/P is not 
                 required. For example, "P1O" and "P100I".
 
-                If the station is for pick only, then the character P is required. For 
-                example, "P2PI", "P30PO". Likewise, if the station is for drop only, then 
+                If the station port is for pick only, then the character P is required. For 
+                example, "P2PI", "P30PO". Likewise, if the station port is for drop only, then 
                 the character D is required. For example, "P2DI", "P50DO". 
 
-                Note that the pick and drop stations must come in pair. In other words, 
+                Note that the pick and drop ports must come in pair. In other words, 
                 if "P1PI" is created, then there must be "P1DI", and vice versa.  
 
                 Each station must be assigned inbound "I" or outbound "O" as the last 
@@ -323,7 +323,7 @@ class GridDesignerUI:
             # XOR check
             if bool("D" in types) != bool("P" in types):  
                 streamlit.error(
-                    "Each pick station must have a matching drop station with the same "
+                    "Each pick port must have a matching drop port with the same "
                     + "station number.",
                     icon="❌",
                 )

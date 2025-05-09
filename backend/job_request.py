@@ -15,10 +15,10 @@ class Station(BaseModel):
 
 
 class Parameters(BaseModel):
-    pick_time: int
-    goods_in_time: int
-    pick_throughput: int
-    goods_in_throughput: int
+    inbound_time: int
+    outbound_time: int
+    inbound_bins_per_order: int
+    outbound_bins_per_order: int
     pareto_probabilities: List[float]
 
 
