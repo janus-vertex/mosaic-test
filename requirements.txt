@@ -79,6 +79,8 @@ plotly==5.24.1
     # via -r requirements.in
 protobuf==5.29.3
     # via streamlit
+psycopg2==2.9.10 --no-binary psycopg2
+    # via -r requirements.in
 pyarrow==18.1.0
     # via streamlit
 pydantic==2.11.3

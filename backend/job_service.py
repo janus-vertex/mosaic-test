@@ -1,12 +1,11 @@
 import time
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy
-import pandas
 import requests
 from exception import SimulationBackendException
 from job_request import JobsCreationRequest
+from simulation_database import SimulationDatabase
 
 SM_BASE_1 = "http://18.138.163.62:3020"
 TC_BASE_1 = "http://13.228.83.247:3030"
@@ -65,21 +64,36 @@ class JobService:
     ):
         self.body = jobs_creation_request
         self.status = job_creation_status
+        self.simulation_run_id = None
+        self.simulation_database = None
         self._set_server()
 
     def create_jobs(self):
         """
         The main method that runs the job creation in simulation.
         """
+        self.simulation_database = SimulationDatabase()
+
+        # Get simulation run ID
+        simulation_run_id = self.simulation_database.add_simulation_run(
+            name=self.body.configuration.name,
+            server_number=self.body.configuration.server_number,
+            start_timestamp=time.time(),
+        )
+        if simulation_run_id is None:
+            raise SimulationBackendException(
+                "Failed to add simulation run metadata to the database"
+            )
+        else:
+            self.simulation_run_id = simulation_run_id
+
         # Create the first log entry to indicate the start of the simulation
         simulation_start_time = time.time()
-        logs = pandas.DataFrame(columns=["time", "station", "bin_id", "action"])
-        logs.loc[len(logs)] = {
-            "time": simulation_start_time,
-            "station": None,
-            "bin_id": None,
-            "action": "Simulation start",
-        }
+        self.simulation_database.log_action(
+            timestamp=simulation_start_time,
+            simulation_run_id=self.simulation_run_id,
+            action="Simulation start",
+        )
 
         # Create a list of station instances from stations in the request
         station_list = [
@@ -110,20 +124,20 @@ class JobService:
                             station_type=station.type
                         )
                         station.bins = self._get_bins_from_order(
-                            number_of_bins=number_of_bins,
-                            logs=logs,
-                            station_code=station.code,
+                            number_of_bins=number_of_bins, station_code=station.code
                         )
 
                         # Call bins from matrix to the station
                         bin_ids = [bin["code"] for bin in station.bins]
                         _ = self._call_bins(station_code=station.code, bin_ids=bin_ids)
-                        logs.loc[len(logs)] = {
-                            "time": current_time,
-                            "station": station.code,
-                            "bin_id": None,
-                            "action": f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}",
-                        }
+
+                        self.simulation_database.log_action(
+                            timestamp=current_time,
+                            simulation_run_id=self.simulation_run_id,
+                            station_code=station.code,
+                            action=f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}",
+                        )
+
                         print(f"{current_time=}, {station.code=}, {bin_ids=} called")
 
                     # Check station status at intervals to see if a bin is at station
@@ -145,13 +159,14 @@ class JobService:
                         # Store the bin at station back to matrix
                         bin_id = status_with_bin_at_station["code"]
                         _ = self._store_bin(station_code=station.code, bin_id=bin_id)
-                        logs.loc[len(logs)] = {
-                            "time": current_time,
-                            "station": station.code,
-                            "bin_id": bin_id,
-                            "action": "Bin stored",
-                        }
 
+                        self.simulation_database.log_action(
+                            timestamp=current_time,
+                            simulation_run_id=self.simulation_run_id,
+                            station_code=station.code,
+                            bin_code=bin_id,
+                            action="Bin stored",
+                        )
                         print(f"{current_time=}, {station.code=}, {bin_id=} stored")
 
                         # Add delay to the next job time
@@ -183,43 +198,27 @@ class JobService:
 
         # Create the last log entry to indicate the end of the simulation
         self.status["stop_time"] = current_time
-        logs.loc[len(logs)] = {
-            "time": current_time,
-            "station": None,
-            "bin_id": None,
-            "action": "Simulation end",
-        }
-
-        # Save the logs
-        data_dir = Path(__file__).parents[0] / "data"
-        simulation_start_datetime = time.strftime(
-            "%Y-%m-%d-%H-%M-%S", time.localtime(simulation_start_time)
-        )
-        logs.to_csv(
-            data_dir
-            / "logs"
-            / f"{self.body.configuration.name}_{simulation_start_datetime}.csv",
-            index=False,
+        self.simulation_database.log_action(
+            timestamp=current_time,
+            simulation_run_id=self.simulation_run_id,
+            action="Simulation end",
         )
 
-        # Update the index file
-        index_df = pandas.read_csv(data_dir / "index.csv")
-        index_df.loc[len(index_df)] = {
-            "name": self.body.configuration.name,
-            "start_time": simulation_start_datetime,
-            "end_time": time.strftime(
-                "%Y-%m-%d-%H-%M-%S", time.localtime(current_time)
-            ),
-            "server": self.body.configuration.server_number,
-        }
-        index_df.to_csv(data_dir / "index.csv", index=False)
+        # Update the simulation run end timestamp
+        self.simulation_database.update_simulation_run_end_timestamp(
+            simulation_run_id=self.simulation_run_id,
+            end_timestamp=current_time,
+        )
+
+        # Close the simulation database connection
+        self.simulation_database.close_connection()
 
         # Stop TC to effectively stop everything
         _ = self._tc_stop()
 
     def _get_number_of_bins_per_order(self, station_type: str) -> int:
         """
-        Get the number of bins per order to call for a given station type. We assume 
+        Get the number of bins per order to call for a given station type. We assume
         this number given is the peak number of bins per order, so the simulation is
         always simulating the busiest scenario.
 
@@ -251,7 +250,6 @@ class JobService:
         self,
         number_of_bins: int = 100,
         delay: float = 1.0,
-        logs: pandas.DataFrame = None,
         station_code: int = None,
     ) -> List[Dict[str, Any]]:
         """
@@ -264,8 +262,6 @@ class JobService:
         delay : float, optional
             The delay between each bin call to avoid busy-waiting. Defaults to 1.0
             second.
-        logs : pandas.DataFrame, optional
-            The logs to append the bin call to. Defaults to None.
         station_code : int, optional
             The code of the station to append the bin call to. Defaults to None.
 
@@ -295,13 +291,12 @@ class JobService:
             int(numpy.sum(layer_indices == i)) for i in range(len(weights))
         ]
 
-        if logs is not None:
-            logs.loc[len(logs)] = {
-                "time": time.time(),
-                "station": station_code,
-                "bin_id": None,
-                "action": f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
-            }
+        self.simulation_database.log_action(
+            timestamp=time.time(),
+            simulation_run_id=self.simulation_run_id,
+            station_code=station_code,
+            action=f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
+        )
 
         print(
             f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned"
