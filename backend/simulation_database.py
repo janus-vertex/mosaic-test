@@ -1,144 +1,94 @@
-from typing import List, Tuple
-
+from typing import List, Optional
 import pandas
-import psycopg2
+from sqlalchemy import create_engine, text, Column, Integer, String, Float
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.exc import SQLAlchemyError
 from config import (
     SIMULATION_DATABASE_HOST,
     SIMULATION_DATABASE_PORT,
     SIMULATION_DATABASE_USER,
     SIMULATION_DATABASE_PASSWORD,
 )
+from urllib.parse import quote_plus
+
+Base = declarative_base()
+
+
+class SimulationRun(Base):
+    __tablename__ = "simulation_runs"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    server_number = Column(Integer)
+    start_timestamp = Column(Float)
+    end_timestamp = Column(Float, nullable=True)
+
+
+class Log(Base):
+    __tablename__ = "logs"
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Float)
+    simulation_run_id = Column(Integer)
+    action = Column(String)
+    station_code = Column(Integer, nullable=True)
+    bin_code = Column(Integer, nullable=True)
 
 
 class SimulationDatabase:
     def __init__(self):
-        self.conn = psycopg2.connect(
-            database="matrix_simulation",
-            host=SIMULATION_DATABASE_HOST,
-            port=SIMULATION_DATABASE_PORT,
-            user=SIMULATION_DATABASE_USER,
-            password=SIMULATION_DATABASE_PASSWORD,
+        # URL encode the username and password to handle special characters
+        database_url = (
+            f"postgresql://{quote_plus(SIMULATION_DATABASE_USER)}:{quote_plus(SIMULATION_DATABASE_PASSWORD)}"
+            f"@{SIMULATION_DATABASE_HOST}:{SIMULATION_DATABASE_PORT}/matrix_simulation"
         )
-
-    def execute_query(
-        self, query: str, params: Tuple = None, fetch: bool = False
-    ) -> List | None:
-        """
-        Execute a SQL query with error handling.
-
-        Parameters
-        ----------
-        query : str
-            SQL query to execute
-        params : tuple, optional
-            Optional parameters for the query
-        fetch : bool, optional
-            Whether to fetch and return results
-
-        Returns
-        -------
-        List | None
-            Query results if fetch=True, None otherwise
-        """
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(query, params)
-
-            result = None
-            if fetch:
-                result = cursor.fetchall()
-            else:
-                self.conn.commit()
-
-            cursor.close()
-            return result
-
-        except Exception as e:
-            print(f"Error executing query: {e}")
-            self.conn.rollback()
-            return None
+        self.engine = create_engine(database_url)
+        Session = sessionmaker(bind=self.engine)
+        self.session = Session()
+        Base.metadata.create_all(self.engine)
 
     def get_all_tables(self) -> List[str]:
-        """
-        Returns a list of all table names in the database.
-
-        Returns
-        -------
-        List[str]
-            List of table names as strings
-        """
-        query = """
+        """Returns a list of all table names in the database."""
+        query = text(
+            """
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public'
         """
-        result = self.execute_query(query, fetch=True)
-        return [table[0] for table in result] if result else []
+        )
+        result = self.session.execute(query)
+        return [row[0] for row in result]
 
-    def close_connection(self):
-        """
-        Closes the database connection.
-        """
-        if self.conn:
-            self.conn.close()
-
-    def add_simulation_run(self, name: str, server_number: int, start_timestamp: float):
-        """
-        Adds a new simulation run to the simulation_runs table.
-
-        Args:
-            name (str): Name of the simulation
-            server_number (int): Server number where the simulation ran
-            start_timestamp (str): Timestamp when the simulation started
-
-        Returns:
-            int: ID of the created simulation run if successful, None otherwise
-        """
-        query = """
-            INSERT INTO simulation_runs (name, server_number, start_timestamp)
-            VALUES (%s, %s, %s)
-            RETURNING id
-        """
+    def add_simulation_run(
+        self, name: str, server_number: int, start_timestamp: float
+    ) -> Optional[int]:
+        """Adds a new simulation run to the simulation_runs table."""
         try:
-            cursor = self.conn.cursor()
-            cursor.execute(query, (name, server_number, start_timestamp))
-            result = cursor.fetchone()
-            self.conn.commit()
-            cursor.close()
-
-            if result:
-                return result[0]
-            else:
-                return None
-
-        except Exception as e:
+            sim_run = SimulationRun(
+                name=name, server_number=server_number, start_timestamp=start_timestamp
+            )
+            self.session.add(sim_run)
+            self.session.commit()
+            return sim_run.id
+        except SQLAlchemyError as e:
             print(f"Error adding simulation run: {e}")
-            self.conn.rollback()
+            self.session.rollback()
             return None
 
     def get_all_simulation_runs(self) -> pandas.DataFrame:
-        """
-        Retrieves all simulation runs from the database.
-
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame containing simulation run data
-        """
+        """Retrieves all simulation runs from the database."""
         try:
-            cursor = self.conn.cursor()
-
-            cursor.execute(
-                """
-                SELECT id, name, server_number, start_timestamp, end_timestamp
-                FROM simulation_runs 
-                ORDER BY start_timestamp DESC
-            """
+            result = (
+                self.session.query(SimulationRun)
+                .order_by(SimulationRun.start_timestamp.desc())
+                .all()
             )
-            result = cursor.fetchall()
-            cursor.close()
-            df = pandas.DataFrame(
-                result,
+            data = [
+                (r.id, r.name, r.server_number, r.start_timestamp, r.end_timestamp)
+                for r in result
+            ]
+            return pandas.DataFrame(
+                data,
                 columns=[
                     "id",
                     "name",
@@ -146,55 +96,31 @@ class SimulationDatabase:
                     "start_timestamp",
                     "end_timestamp",
                 ],
-                dtype={
-                    "id": int,
-                    "name": str,
-                    "server_number": int,
-                    "start_timestamp": float,
-                    "end_timestamp": float,
-                },
             )
-            return df
-
-        except Exception as e:
+        except SQLAlchemyError as e:
             print(f"Error fetching simulation runs: {e}")
-            return []
+            return pandas.DataFrame()
 
     def update_simulation_run_end_timestamp(
         self, simulation_run_id: int, end_timestamp: float
     ) -> bool:
-        """
-        Updates the end timestamp for a simulation run.
-
-        Args:
-            simulation_run_id (int): The ID of the simulation run to update
-            end_timestamp (float): The end timestamp to set
-
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
+        """Updates the end timestamp for a simulation run."""
         try:
-            cursor = self.conn.cursor()
-            query = """
-                UPDATE simulation_runs 
-                SET end_timestamp = %s 
-                WHERE id = %s
-            """
-            cursor.execute(query, (end_timestamp, simulation_run_id))
-            rows_affected = cursor.rowcount
-            self.conn.commit()
-            cursor.close()
-
-            if rows_affected > 0:
+            sim_run = (
+                self.session.query(SimulationRun)
+                .filter_by(id=simulation_run_id)
+                .first()
+            )
+            if sim_run:
+                sim_run.end_timestamp = end_timestamp
+                self.session.commit()
                 print(f"Updated end time for simulation run ID {simulation_run_id}")
                 return True
-            else:
-                print(f"No simulation run found with ID {simulation_run_id}")
-                return False
-
-        except Exception as e:
+            print(f"No simulation run found with ID {simulation_run_id}")
+            return False
+        except SQLAlchemyError as e:
             print(f"Error updating simulation end time: {e}")
-            self.conn.rollback()
+            self.session.rollback()
             return False
 
     def log_action(
@@ -202,98 +128,55 @@ class SimulationDatabase:
         timestamp: float,
         simulation_run_id: int,
         action: str,
-        station_code: int = None,
-        bin_code: int = None,
+        station_code: Optional[int] = None,
+        bin_code: Optional[int] = None,
     ) -> bool:
-        """
-        Logs an action to the simulation logs table.
-
-        Parameters
-        ----------
-        timestamp : float
-            The timestamp when the action occurred
-        simulation_run_id : int
-            The ID of the simulation run
-        action : str
-            Description of the action
-        station_code : int, optional
-            The station code if applicable
-        bin_code : int, optional
-            The bin code if applicable
-
-        Returns
-        -------
-        bool
-            True if logging was successful, False otherwise
-        """
-        cursor = self.conn.cursor()
-        query = """
-            INSERT INTO logs (timestamp, simulation_run_id, action, station_code, bin_code)
-            VALUES (%s, %s, %s, %s, %s)
-        """
-        cursor.execute(
-            query, (timestamp, simulation_run_id, action, station_code, bin_code)
-        )
-        self.conn.commit()
-        cursor.close()
-        return True
-
-
-    def get_logs(self, simulation_run_id: int = None) -> pandas.DataFrame:
-        """
-        Retrieves simulation logs as a pandas DataFrame.
-
-        Parameters
-        ----------
-        simulation_run_id : int, optional
-            If provided, only logs for this simulation run will be returned.
-            If None, all logs will be returned.
-
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame containing the logs data
-        """
+        """Logs an action to the simulation logs table."""
         try:
+            log = Log(
+                timestamp=timestamp,
+                simulation_run_id=simulation_run_id,
+                action=action,
+                station_code=station_code,
+                bin_code=bin_code,
+            )
+            self.session.add(log)
+            self.session.commit()
+            return True
+        except SQLAlchemyError as e:
+            print(f"Error logging action: {e}")
+            self.session.rollback()
+            return False
 
-            filter_query = ""
+    def get_logs(self, simulation_run_id: Optional[int] = None) -> pandas.DataFrame:
+        """Retrieves simulation logs as a pandas DataFrame."""
+        try:
+            query = self.session.query(Log)
             if simulation_run_id is not None:
-                filter_query = f"WHERE simulation_run_id = {simulation_run_id}"
+                query = query.filter_by(simulation_run_id=simulation_run_id)
+            query = query.order_by(Log.timestamp)
 
-            query = f"""
-                SELECT timestamp, simulation_run_id, action, station_code, bin_code
-                FROM logs
-                {filter_query}
-                ORDER BY timestamp
-            """
-            cursor = self.conn.cursor()
-            cursor.execute(query)
-
-            columns = [
-                "timestamp",
-                "simulation_run_id",
-                "action",
-                "station_code",
-                "bin_code",
+            result = query.all()
+            data = [
+                (r.timestamp, r.simulation_run_id, r.action, r.station_code, r.bin_code)
+                for r in result
             ]
-            data = cursor.fetchall()
-            cursor.close()
-
-            return pandas.DataFrame(data, columns=columns)
-
-        except Exception as e:
+            return pandas.DataFrame(
+                data,
+                columns=[
+                    "timestamp",
+                    "simulation_run_id",
+                    "action",
+                    "station_code",
+                    "bin_code",
+                ],
+            )
+        except SQLAlchemyError as e:
             print(f"Error retrieving logs: {e}")
             return pandas.DataFrame()
 
-
-if __name__ == "__main__":
-    db = SimulationDatabase()
-
-    # Test add log
-    db.log_action(12345.6, 2, "Test action", 1, 1)
-
-    # Test log_action
-    a = db.get_logs()
-    db.close_connection()
-
+    def close_connection(self):
+        """Closes the database connection."""
+        self.session.close()
+        self.engine.dispose()
 
