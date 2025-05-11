@@ -7,7 +7,12 @@ from job_service import JobsCreationRequest, JobService
 app = FastAPI()
 
 # Add this at the top level of the file
-job_creation_status = {"start_time": None, "stop_requested": False, "stop_time": None}
+job_creation_status = {
+    "start_time": None,
+    "stop_requested": False,
+    "stop_time": None,
+    "simulation_name": None,
+}
 
 
 @app.get("/time")
@@ -36,13 +41,14 @@ async def create_jobs(
     job_creation_status["start_time"] = None
     job_creation_status["stop_requested"] = False
     job_creation_status["stop_time"] = None
+    job_creation_status["simulation_name"] = jobs_creation_request.configuration.name
 
     job_service = JobService(
         jobs_creation_request=jobs_creation_request,
         job_creation_status=job_creation_status,
     )
 
-    def create_jobs_and_update_status():        
+    def create_jobs_and_update_status():
         job_creation_status["start_time"] = time.time()
         job_service.create_jobs()
 
