@@ -9,6 +9,10 @@ ENV PYTHONPATH=/app/backend
 COPY requirements.txt .
 
 # Install dependencies
+# Update package lists and install required system dependencies:
+# - libpq-dev: PostgreSQL client development files needed for psycopg2 (PostgreSQL adapter for Python)
+# - python3-dev: Python development headers required for compiling certain Python packages with C extensions
+RUN apt-get update && apt-get install -y libpq-dev python3-dev build-essential
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
