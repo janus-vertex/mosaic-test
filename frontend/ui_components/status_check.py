@@ -33,7 +33,7 @@ class StatusCheckUI:
     def check_if_simulation_is_running(
         self, TC_base: str, SM_base: str, simulation_base: str
     ):
-        is_healthy, is_simulation_running, is_simulation_completed, simulation_id = (
+        is_healthy, is_tc_running, is_simulation_completed, simulation_name = (
             MosaicRequest.general_check(
                 TC_base=TC_base, SM_base=SM_base, simulation_base=simulation_base
             )
@@ -42,18 +42,20 @@ class StatusCheckUI:
         if not is_healthy:
             streamlit.warning("Server is unavailable.")
 
-        elif is_simulation_running:
+        elif is_tc_running:
             if is_simulation_completed:
-                streamlit.success(f"Simulation {simulation_id} completed successfully!")
+                streamlit.success(
+                    f"Simulation {simulation_name} completed successfully!"
+                )
             else:
-                streamlit.success(f"Simulation {simulation_id} is running.")
+                streamlit.success(f"Simulation {simulation_name} is running.")
             is_stop_simulation = streamlit.button(
                 "Stop Simulation", key=f"{TC_base} stop button"
             )
             if is_stop_simulation:
                 MosaicRequest.stop(TC_base=TC_base, simulation_base=simulation_base)
 
-        elif is_simulation_running is False:
+        elif is_tc_running is False:
             streamlit.success("No simulation is running.")
 
         else:

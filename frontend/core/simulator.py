@@ -18,10 +18,12 @@ class Simulator:
         self.simulation_preparation_ui = simulation_preparation_ui
         self._set_server()
 
-    def run(self):
-        is_healthy, is_simulation_running, _, simulation_id = (
+    def run(self, simulation_name: str):
+        is_healthy, is_simulation_running, _, previous_simulation_name = (
             MosaicRequest.general_check(
-                TC_base=self.TC_BASE, SM_base=self.SM_BASE, simulation_base=self.SIMULATION_BASE
+                TC_base=self.TC_BASE,
+                SM_base=self.SM_BASE,
+                simulation_base=self.SIMULATION_BASE,
             )
         )
         if not is_healthy:
@@ -32,7 +34,7 @@ class Simulator:
 
         if is_simulation_running:
             streamlit.warning(
-                "A simulation is running. Please stop it before running "
+                f"Simulation {previous_simulation_name} is running. Please stop it before running "
                 + "another one by pressing the stop button at the top of the page.",
                 icon="⚠️",
             )
@@ -58,7 +60,7 @@ class Simulator:
             _ = step_func()
             progress_bar.progress((i + 1) / len(steps))
 
-        status_text.text(f"Simulation {simulation_id} started successfully!")
+        status_text.text(f"Simulation {simulation_name} started successfully!")
 
     def stop(self) -> requests.Response | None:
         try:

@@ -26,4 +26,4 @@ def simulation_tab():
     is_start_simulation = streamlit.button("Start Simulation", type="primary")
 
     if is_start_simulation:
-        simulator.run()
+        simulator.run(simulation_name=simulation_input_ui.simulation_name)
