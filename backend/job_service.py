@@ -321,7 +321,15 @@ class JobService:
                 + "is down."
             )
 
-        return bins
+        # Make sure the bin codes are unique. Only keep the first occurrence of each bin.
+        unique_bins = []
+        unique_bin_codes = set()
+        for bin in bins:
+            if bin["code"] not in unique_bin_codes:
+                unique_bins.append(bin)
+                unique_bin_codes.add(bin["code"])
+
+        return unique_bins
 
     def _get_bins_from_layers(
         self, quantity: int, min_layer: int, max_layer: int
