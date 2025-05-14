@@ -169,6 +169,39 @@ class SimulationDatabase:
             print(f"Error retrieving logs: {e}")
             return pandas.DataFrame()
 
+    def get_parameters_by_simulation_run(self, simulation_run_id: int) -> pandas.DataFrame:
+        """
+        Retrieves parameters for a specific simulation run.
+
+        Parameters
+        ----------  
+        simulation_run_id : int
+            The ID of the simulation run
+
+        Returns
+        -------
+        pandas.DataFrame
+            A DataFrame of parameters for the specified simulation run  
+        """
+        try:
+            query = text(
+                f"""
+                SELECT * FROM public.parameters
+                WHERE simulation_run_id = {simulation_run_id}
+                """
+            )
+
+            result = self.session.execute(query)
+            df = pandas.DataFrame(result.fetchall())
+
+            if not df.empty:
+                df.columns = result.keys()
+
+            return df
+        except SQLAlchemyError as e:
+            print(f"Error retrieving parameters: {e}")
+            return pandas.DataFrame()
+
     def close_connection(self):
         """Closes the database connection."""
         self.session.close()
