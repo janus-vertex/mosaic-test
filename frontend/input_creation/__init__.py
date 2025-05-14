@@ -5,3 +5,4 @@ from .input_tc_obstacles import InputTCObstacles
 from .input_buffer import InputBuffer
 from .input_jobs import InputJobs
 from .input_delay import InputDelay
+from .input_database import InputDatabase

@@ -59,22 +59,6 @@ class SimulationDatabase:
         result = self.session.execute(query)
         return [row[0] for row in result]
 
-    def add_simulation_run(
-        self, name: str, server_number: int, start_timestamp: float
-    ) -> Optional[int]:
-        """Adds a new simulation run to the simulation_runs table."""
-        try:
-            sim_run = SimulationRun(
-                name=name, server_number=server_number, start_timestamp=start_timestamp
-            )
-            self.session.add(sim_run)
-            self.session.commit()
-            return sim_run.id
-        except SQLAlchemyError as e:
-            print(f"Error adding simulation run: {e}")
-            self.session.rollback()
-            return None
-
     def get_all_simulation_runs(self) -> pandas.DataFrame:
         """Retrieves all simulation runs from the database."""
         try:
@@ -101,8 +85,11 @@ class SimulationDatabase:
             print(f"Error fetching simulation runs: {e}")
             return pandas.DataFrame()
 
-    def update_simulation_run_end_timestamp(
-        self, simulation_run_id: int, end_timestamp: float
+    def update_simulation_run_timestamp(
+        self,
+        simulation_run_id: int,
+        start_timestamp: float = None,
+        end_timestamp: float = None,
     ) -> bool:
         """Updates the end timestamp for a simulation run."""
         try:
@@ -112,7 +99,12 @@ class SimulationDatabase:
                 .first()
             )
             if sim_run:
-                sim_run.end_timestamp = end_timestamp
+                if start_timestamp is not None:
+                    sim_run.start_timestamp = start_timestamp
+                elif end_timestamp is not None:
+                    sim_run.end_timestamp = end_timestamp
+                else:
+                    raise ValueError("No timestamp provided")
                 self.session.commit()
                 print(f"Updated end time for simulation run ID {simulation_run_id}")
                 return True
@@ -179,4 +171,3 @@ class SimulationDatabase:
         """Closes the database connection."""
         self.session.close()
         self.engine.dispose()
-

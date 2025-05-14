@@ -61,6 +61,9 @@ class InputSimulation:
 
         self.stations = stations
 
+    def update_simulation_run_id(self, simulation_run_id: int):
+        self.configuration.id = simulation_run_id
+
     def to_json(
         self,
         save: bool = False,
@@ -107,6 +110,9 @@ class InputConfiguration:
         self.name = name
         self.duration_in_seconds = duration_in_seconds
         self.server_number = server_number
+
+        # To be updated by the database
+        self.id = None
 
 
 class InputStation:
