@@ -20,6 +20,9 @@ class GridDesignerUI:
     def __init__(self):
         self.buffer_ratio = None
         self.z_size = None
+        self.grid_data = None
+        self.stations = None
+        self.number_of_bins = None
 
     def show(self) -> bool:
         """
@@ -39,6 +42,7 @@ class GridDesignerUI:
         number_of_bins = col1.number_input(
             "Number of bins expected", min_value=1, value=1000, step=1
         )
+        self.number_of_bins = number_of_bins
         buffer_percentage = col2.number_input(
             "Buffer percentage expected", min_value=0, max_value=100, value=15, step=1
         )

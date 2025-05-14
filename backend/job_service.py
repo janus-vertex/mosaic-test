@@ -73,22 +73,15 @@ class JobService:
         The main method that runs the job creation in simulation.
         """
         self.simulation_database = SimulationDatabase()
+        self.simulation_run_id = self.body.configuration.id
 
-        # Get simulation run ID
-        simulation_run_id = self.simulation_database.add_simulation_run(
-            name=self.body.configuration.name,
-            server_number=self.body.configuration.server_number,
-            start_timestamp=time.time(),
+        simulation_start_time = time.time()
+        self.simulation_database.update_simulation_run_timestamp(
+            simulation_run_id=self.simulation_run_id,
+            start_timestamp=simulation_start_time,
         )
-        if simulation_run_id is None:
-            raise SimulationBackendException(
-                "Failed to add simulation run metadata to the database"
-            )
-        else:
-            self.simulation_run_id = simulation_run_id
 
         # Create the first log entry to indicate the start of the simulation
-        simulation_start_time = time.time()
         self.simulation_database.log_action(
             timestamp=simulation_start_time,
             simulation_run_id=self.simulation_run_id,
@@ -132,7 +125,7 @@ class JobService:
                         _ = self._call_bins(station_code=station.code, bin_ids=bin_ids)
 
                         self.simulation_database.log_action(
-                            timestamp=current_time,
+                            timestamp=time.time(),
                             simulation_run_id=self.simulation_run_id,
                             station_code=station.code,
                             action=f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}",
@@ -161,7 +154,7 @@ class JobService:
                         _ = self._store_bin(station_code=station.code, bin_id=bin_id)
 
                         self.simulation_database.log_action(
-                            timestamp=current_time,
+                            timestamp=time.time(),
                             simulation_run_id=self.simulation_run_id,
                             station_code=station.code,
                             bin_code=bin_id,
@@ -205,7 +198,7 @@ class JobService:
         )
 
         # Update the simulation run end timestamp
-        self.simulation_database.update_simulation_run_end_timestamp(
+        self.simulation_database.update_simulation_run_timestamp(
             simulation_run_id=self.simulation_run_id,
             end_timestamp=current_time,
         )

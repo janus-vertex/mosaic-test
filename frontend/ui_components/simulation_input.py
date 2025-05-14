@@ -129,13 +129,17 @@ class SimulationInputUI:
         self._show_bin_distribution_plot(pareto_p, pareto_q)
 
         # Assign values for later use
+        self.simulation_duration_in_seconds = simulation_duration_in_seconds
+        self.simulation_name = simulation_name
         self.inbound_bins_per_order = inbound_bins_per_order
         self.outbound_bins_per_order = outbound_bins_per_order
+        self.inbound_orders_per_hour = inbound_orders_per_hour
+        self.outbound_orders_per_hour = outbound_orders_per_hour
         self.inbound_time = inbound_time
         self.outbound_time = outbound_time
         self.number_of_skycars = number_of_skycars
-        self.simulation_duration_in_seconds = simulation_duration_in_seconds
-        self.simulation_name = simulation_name
+        self.pareto_p = pareto_p
+        self.pareto_q = pareto_q
 
         streamlit.divider()
 

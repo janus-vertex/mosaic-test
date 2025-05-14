@@ -10,7 +10,8 @@ from core.config import (
 )
 from ui_components.simulation_preparation import SimulationPreparationUI
 
-from frontend.core.simulation_requests import MosaicRequest
+from core.simulation_requests import MosaicRequest
+from core.simulation_database import SimulationDatabase
 
 
 class Simulator:
@@ -50,6 +51,7 @@ class Simulator:
             ("Start Cube", self._start_cube),
             ("Set Time Delay", self._set_delay),
             ("Start Simulation", self._start_simulation),
+            ("Save Simulation Parameters", self._save_simulation_parameters),
         ]
 
         progress_bar = streamlit.progress(0)
@@ -148,9 +150,33 @@ class Simulator:
         return response
 
     def _start_simulation(self) -> requests.Response:
+        simulation_database = SimulationDatabase()
+        simulation_run_id = simulation_database.add_simulation_run(
+            name=self.simulation_preparation_ui.input_simulation.configuration.name,
+            server_number=self.simulation_preparation_ui.server_number,
+        )
+        simulation_database.close_connection()
+
+        self.simulation_preparation_ui.input_simulation.update_simulation_run_id(
+            simulation_run_id=simulation_run_id
+        )
+
         response = MosaicRequest.send_request(
             url=f"{self.SIMULATION_BASE}/jobs/create",
             method="POST",
             data=self.simulation_preparation_ui.input_simulation.to_json(type="dict"),
         )
         return response
+
+    def _save_simulation_parameters(self):
+        simulation_database = SimulationDatabase()
+        simulation_run_id = (
+            self.simulation_preparation_ui.input_simulation.configuration.id
+        )
+        simulation_database.add_simulation_parameters(
+            simulation_run_id=simulation_run_id,
+            parameters=self.simulation_preparation_ui.input_database.to_json(
+                type="dict"
+            ),
+        )
+        simulation_database.close_connection()

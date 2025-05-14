@@ -4,6 +4,7 @@ from typing import List
 import streamlit
 from core.parameters import Parameters
 from input_creation.input_buffer import InputBuffer
+from input_creation.input_database import InputDatabase
 from input_creation.input_delay import InputDelay
 from input_creation.input_jobs import InputJobs
 from input_creation.input_simulation import InputSimulation
@@ -54,6 +55,12 @@ class SimulationPreparationUI:
             grid_designer_ui=self.grid_designer_ui,
             server_number=server_number,
         )
+        input_database = InputDatabase(
+            simulation_input_ui=self.simulation_input_ui,
+            grid_designer_ui=self.grid_designer_ui,
+            input_zones_and_stations=input_zones_and_stations,
+            input_simulation=input_simulation,
+        )
 
         # Option to show request files
         is_show_files = streamlit.checkbox("Show request files")
@@ -100,6 +107,12 @@ class SimulationPreparationUI:
                     json_data=json_data, file_name="reset-simulation.json"
                 )
 
+            with streamlit.expander("reset-database.json: Database"):
+                json_data = input_database.to_json()
+                self._show_individual_json_file(
+                    json_data=json_data, file_name="reset-database.json"
+                )
+
         self.input_zones_and_stations = input_zones_and_stations
         self.input_sm_obstacles = input_sm_obstacles
         self.input_buffer = input_buffer
@@ -107,6 +120,7 @@ class SimulationPreparationUI:
         self.input_tc_obstacles = input_tc_obstacles
         self.input_delay = input_delay
         self.input_simulation = input_simulation
+        self.input_database = input_database
         self.server_number = server_number
 
         return True
@@ -120,4 +134,3 @@ class SimulationPreparationUI:
             type="primary",
         )
         streamlit.json(json_data)
-

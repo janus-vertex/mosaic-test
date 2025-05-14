@@ -37,7 +37,7 @@ class MosaicRequest:
 
         except requests.exceptions.RequestException as _:
             is_healthy = False
-            return is_healthy, None, None, None
+            return is_healthy, None
 
     @staticmethod
     def backend_status_check(
