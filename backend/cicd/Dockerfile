@@ -6,7 +6,7 @@ WORKDIR /app/backend
 ENV PYTHONPATH=/app/backend
 
 # Copy requirements first to leverage Docker cache
-COPY requirements.txt .
+COPY ./backend/requirements/requirements.txt .
 
 # Install dependencies
 # Update package lists and install required system dependencies:
@@ -14,7 +14,6 @@ COPY requirements.txt .
 # - python3-dev: Python development headers required for compiling certain Python packages with C extensions
 RUN apt-get update && apt-get install -y libpq-dev python3-dev build-essential
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install psycopg2
 
 # Copy the application code
 COPY ./backend/ .

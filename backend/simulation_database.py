@@ -106,12 +106,11 @@ class SimulationDatabase:
                 else:
                     raise ValueError("No timestamp provided")
                 self.session.commit()
-                print(f"Updated end time for simulation run ID {simulation_run_id}")
                 return True
             print(f"No simulation run found with ID {simulation_run_id}")
             return False
         except SQLAlchemyError as e:
-            print(f"Error updating simulation end time: {e}")
+            print(f"Error updating simulation time: {e}")
             self.session.rollback()
             return False
 

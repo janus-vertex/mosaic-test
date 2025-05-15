@@ -2,7 +2,8 @@ import streamlit
 
 TC_BASE_1 = streamlit.secrets["TC_BASE_1"]
 SM_BASE_1 = streamlit.secrets["SM_BASE_1"]
-SIMULATION_BASE_1 = streamlit.secrets["SIMULATION_BASE_1"]
+# SIMULATION_BASE_1 = streamlit.secrets["SIMULATION_BASE_1"]
+SIMULATION_BASE_1 = "http://localhost:3000"
 MONGO_HOST_1 = streamlit.secrets["MONGO_HOST_1"]
 MONGO_NAME_1 = streamlit.secrets["MONGO_NAME_1"]
 
