@@ -86,6 +86,11 @@ class ResultUI:
         if simulation_chosen is None:
             return
 
+        # Show a progress bar 
+        progress_bar = streamlit.progress(0)
+        status_text = streamlit.empty()
+        status_text.text("Please wait while the results are being loaded...")
+
         # Get the ID of the chosen simulation run
         selected_simulation = simulation_runs[
             simulation_runs["name_to_display"] == simulation_chosen
@@ -94,30 +99,41 @@ class ResultUI:
 
         # Get the logs of the chosen simulation run
         self.logs = simulation_database.get_logs_by_simulation_run(simulation_run_id)
+        progress_bar.progress(12)
 
         # Get the parameters of the chosen simulation run
         simulation_parameters = simulation_database.get_parameters_by_simulation_run(
             simulation_run_id
         )
+        progress_bar.progress(25)
 
         self.stations = self._parse_stations_from_string(
             simulation_parameters["stations_string"].iloc[0]
         )
+        progress_bar.progress(37)
+
         log_start_timestamp = self.logs["timestamp"].min()
         log_end_timestamp = self.logs["timestamp"].max()
         self.duration_in_hours = (log_end_timestamp - log_start_timestamp) / 3600
+        progress_bar.progress(50)
 
         # Connect to MongoDB to get movement data
         mongo_service = MongoService(
             server_number=selected_simulation["server_number"].iloc[0]
         )
+        progress_bar.progress(62)
+
         self.movement_data = mongo_service.get_movement_data(
             start_timestamp=log_start_timestamp, end_timestamp=log_end_timestamp
         )
+        progress_bar.progress(75)
 
         self._show_station_statistics()
+        progress_bar.progress(87)
 
         self._show_handling_rate_statistics()
+        progress_bar.progress(100)
+        status_text.text("")
 
         # Close connections
         simulation_database.close_connection()
