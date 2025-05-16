@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: 'Choose deployment target'
+        required: true
+        type: choice
+        options:
+          - both
+          - server-1-3000
+          - server-2-3020
 
 env:
   AWS_REGION: ap-southeast-1
@@ -43,29 +52,46 @@ jobs:
         run: |
           echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
 
-          # Create the remote command with proper environment variable expansion
-          ssh -o StrictHostKeyChecking=no -i private_key ${USERNAME}@${HOSTNAME} \
-          "aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} && \
+          # Base commands for AWS setup
+          BASE_COMMANDS="aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} && \
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} && \
           aws configure set region ${{ env.AWS_REGION }} && \
           aws ecr get-login-password --region ${{ env.AWS_REGION }}| docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }} && \
           docker ps -a -q | xargs -r docker stop && \
           docker ps -a -q | xargs -r docker rm && \
-          docker pull ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest && \
-          docker run -d --restart=unless-stopped -p 3000:8000 \
-             -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
-             -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
-             -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
-             -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
-             '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"
-             
-             
-          #     && \
-          #  docker run -d --restart=unless-stopped -p 3020:8000 \
-          #    -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
-          #    -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
-          #    -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
-          #    -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
-          #    '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"  
+          docker pull ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest"
+
+          # Deployment commands based on condition
+          if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event.inputs.deployment_target }}" == "both" ]]; then
+            DEPLOY_COMMANDS="&& docker run -d --restart=unless-stopped -p 3000:8000 \
+              -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
+              -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
+              -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
+              -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
+              '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest && \
+            docker run -d --restart=unless-stopped -p 3020:8000 \
+              -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
+              -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
+              -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
+              -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
+              '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"
+          elif [[ "${{ github.event.inputs.deployment_target }}" == "server-1-3000" ]]; then
+            DEPLOY_COMMANDS="&& docker run -d --restart=unless-stopped -p 3000:8000 \
+              -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
+              -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
+              -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
+              -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
+              '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"
+          elif [[ "${{ github.event.inputs.deployment_target }}" == "server-2-3020" ]]; then
+            DEPLOY_COMMANDS="&& docker run -d --restart=unless-stopped -p 3020:8000 \
+              -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
+              -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
+              -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
+              -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
+              '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"
+          fi
+
+          # Execute the commands
+          ssh -o StrictHostKeyChecking=no -i private_key ${USERNAME}@${HOSTNAME} "${BASE_COMMANDS} ${DEPLOY_COMMANDS}"
 
           rm -f private_key
