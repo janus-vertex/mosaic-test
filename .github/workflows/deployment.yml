@@ -50,6 +50,13 @@ jobs:
           HOSTNAME: ${{ secrets.EC2_HOSTNAME }}
           USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
+          # Display chosen deployment target
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "Deployment triggered by push - deploying to both servers"
+          else
+            echo "Manually triggered deployment: ${{ github.event.inputs.deployment_target }}"
+          fi
+
           echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
 
           # Base commands for AWS setup
