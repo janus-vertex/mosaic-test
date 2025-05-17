@@ -7,8 +7,8 @@ sys.path.extend([str(root_dir / "frontend"), str(root_dir / "backend")])
 
 import streamlit
 
-from frontend.tabs import simulation_tab, result_tab
-from frontend.ui_components import StatusCheckUI
+from tabs import simulation_tab, result_tab
+from ui_components import StatusCheckUI
 
 
 def main():

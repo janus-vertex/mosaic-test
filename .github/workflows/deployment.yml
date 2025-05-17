@@ -47,23 +47,31 @@ jobs:
           BASE_COMMANDS="aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} && \
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} && \
           aws configure set region ${{ env.AWS_REGION }} && \
-          aws ecr get-login-password --region ${{ env.AWS_REGION }}| docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }} && \
-          docker ps -a -q | xargs -r docker stop && \
-          docker ps -a -q | xargs -r docker rm && \
-          docker pull ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest"
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}"
 
-          DEPLOY_COMMANDS="&& docker run -d --restart=unless-stopped -p 3000:8000 \
-            -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
-            -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
-            -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
-            -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
-            '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest && \
-          docker run -d --restart=unless-stopped -p 3020:8000 \
-            -e SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
-            -e SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
-            -e SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
-            -e SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
-            '${{ secrets.ECR_REGISTRY }}'/'${{ secrets.ECR_REPOSITORY }}':latest"
+          # Copy docker-compose.yml to remote server
+          scp -o StrictHostKeyChecking=no -i private_key docker-compose.yml ${USERNAME}@${HOSTNAME}:~/docker-compose.yml
+
+          # Set environment variables, pull images, and run docker-compose
+          DEPLOY_COMMANDS="&& export TC_BASE_1='${{ secrets.TC_BASE_1 }}' \
+          && export SM_BASE_1='${{ secrets.SM_BASE_1 }}' \
+          && export SIMULATION_BASE_1='${{ secrets.SIMULATION_BASE_1 }}' \
+          && export MONGO_HOST_1='${{ secrets.MONGO_HOST_1 }}' \
+          && export MONGO_NAME_1='${{ secrets.MONGO_NAME_1 }}' \
+          && export TC_BASE_2='${{ secrets.TC_BASE_2 }}' \
+          && export SM_BASE_2='${{ secrets.SM_BASE_2 }}' \
+          && export SIMULATION_BASE_2='${{ secrets.SIMULATION_BASE_2 }}' \
+          && export MONGO_HOST_2='${{ secrets.MONGO_HOST_2 }}' \
+          && export MONGO_NAME_2='${{ secrets.MONGO_NAME_2 }}' \
+          && export SIMULATION_DATABASE_HOST='${{ secrets.SIMULATION_DATABASE_HOST }}' \
+          && export SIMULATION_DATABASE_PORT='${{ secrets.SIMULATION_DATABASE_PORT }}' \
+          && export SIMULATION_DATABASE_USER='${{ secrets.SIMULATION_DATABASE_USER }}' \
+          && export SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
+          && export MONGO_USER='${{ secrets.MONGO_USER }}' \
+          && export MONGO_PASSWORD='${{ secrets.MONGO_PASSWORD }}' \
+          && docker-compose down --remove-orphans \
+          && docker-compose pull \
+          && docker-compose up -d --force-recreate"
 
           # Execute the commands
           ssh -o StrictHostKeyChecking=no -i private_key ${USERNAME}@${HOSTNAME} "${BASE_COMMANDS} ${DEPLOY_COMMANDS}"

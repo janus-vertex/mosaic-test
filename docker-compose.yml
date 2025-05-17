@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  backend1:
+    build:
+      context: ./backend
+      dockerfile: cicd/Dockerfile
+    container_name: fastapi_backend_1
+    ports:
+      - "3000:8000"
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  backend2:
+    build:
+      context: ./backend
+      dockerfile: cicd/Dockerfile
+    container_name: fastapi_backend_2
+    ports:
+      - "3020:8000"
+    networks:
+      - app_networks
+    restart: unless-stopped
+
+  frontend1:
+    build:
+      context: ./frontend
+      dockerfile: cicd/Dockerfile
+    container_name: streamlit_frontend_1
+    ports:
+      - "3021:8501"
+    depends_on:
+      - backend1
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  frontend2:
+    build:
+      context: ./frontend
+      dockerfile: cicd/Dockerfile
+    container_name: streamlit_frontend_2
+    ports:
+      - "3022:8501"
+    depends_on:
+      - backend2
+    networks:
+      - app_network
+    restart: unless-stopped
+
+networks:
+  app_network:
+    driver: bridge 
