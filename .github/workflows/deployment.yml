@@ -27,13 +27,21 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build and push Docker image
+      - name: Build and push backend Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./backend/cicd/Dockerfile
           push: true
-          tags: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest
+          tags: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_BACKEND_REPOSITORY }}:latest
+
+      - name: Build and push frontend Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./frontend/cicd/Dockerfile
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_FRONTEND_REPOSITORY }}:latest
 
       - name: Deploy to EC2
         env:
@@ -53,7 +61,10 @@ jobs:
           scp -o StrictHostKeyChecking=no -i private_key docker-compose.yml ${USERNAME}@${HOSTNAME}:~/docker-compose.yml
 
           # Set environment variables, pull images, and run docker-compose
-          DEPLOY_COMMANDS="&& export TC_BASE_1='${{ secrets.TC_BASE_1 }}' \
+          DEPLOY_COMMANDS="&& export ECR_REGISTRY='${{ secrets.ECR_REGISTRY }}' \
+          && export ECR_BACKEND_REPOSITORY='${{ secrets.ECR_BACKEND_REPOSITORY }}' \
+          && export ECR_FRONTEND_REPOSITORY='${{ secrets.ECR_FRONTEND_REPOSITORY }}' \
+          && export TC_BASE_1='${{ secrets.TC_BASE_1 }}' \
           && export SM_BASE_1='${{ secrets.SM_BASE_1 }}' \
           && export SIMULATION_BASE_1='${{ secrets.SIMULATION_BASE_1 }}' \
           && export MONGO_HOST_1='${{ secrets.MONGO_HOST_1 }}' \

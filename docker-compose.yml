@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   backend1:
+    image: ${ECR_REGISTRY}/${ECR_BACKEND_REPOSITORY}:latest
     build:
       context: ./backend
       dockerfile: cicd/Dockerfile
@@ -13,6 +14,7 @@ services:
     restart: unless-stopped
 
   backend2:
+    image: ${ECR_REGISTRY}/${ECR_BACKEND_REPOSITORY}:latest
     build:
       context: ./backend
       dockerfile: cicd/Dockerfile
@@ -24,6 +26,7 @@ services:
     restart: unless-stopped
 
   frontend1:
+    image: ${ECR_REGISTRY}/${ECR_FRONTEND_REPOSITORY}:latest
     build:
       context: ./frontend
       dockerfile: cicd/Dockerfile
@@ -37,6 +40,7 @@ services:
     restart: unless-stopped
 
   frontend2:
+    image: ${ECR_REGISTRY}/${ECR_FRONTEND_REPOSITORY}:latest
     build:
       context: ./frontend
       dockerfile: cicd/Dockerfile
