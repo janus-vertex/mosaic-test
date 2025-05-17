@@ -8,7 +8,7 @@ from core.config import (
     TC_BASE_2,
 )
 
-from frontend.core.simulation_requests import MosaicRequest
+from core.simulation_requests import MosaicRequest
 
 
 class StatusCheckUI:
