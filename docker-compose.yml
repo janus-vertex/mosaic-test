@@ -3,9 +3,6 @@ version: '3.8'
 services:
   backend1:
     image: ${ECR_REGISTRY}/${ECR_BACKEND_REPOSITORY}:latest
-    build:
-      context: ./backend
-      dockerfile: cicd/Dockerfile
     container_name: fastapi_backend_1
     ports:
       - "3000:8000"
@@ -15,21 +12,15 @@ services:
 
   backend2:
     image: ${ECR_REGISTRY}/${ECR_BACKEND_REPOSITORY}:latest
-    build:
-      context: ./backend
-      dockerfile: cicd/Dockerfile
     container_name: fastapi_backend_2
     ports:
       - "3020:8000"
     networks:
-      - app_networks
+      - app_network
     restart: unless-stopped
 
   frontend1:
     image: ${ECR_REGISTRY}/${ECR_FRONTEND_REPOSITORY}:latest
-    build:
-      context: ./frontend
-      dockerfile: cicd/Dockerfile
     container_name: streamlit_frontend_1
     ports:
       - "3021:8501"
@@ -41,9 +32,6 @@ services:
 
   frontend2:
     image: ${ECR_REGISTRY}/${ECR_FRONTEND_REPOSITORY}:latest
-    build:
-      context: ./frontend
-      dockerfile: cicd/Dockerfile
     container_name: streamlit_frontend_2
     ports:
       - "3022:8501"
