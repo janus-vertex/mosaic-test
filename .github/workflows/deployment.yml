@@ -80,7 +80,10 @@ jobs:
           && export SIMULATION_DATABASE_PASSWORD='${{ secrets.SIMULATION_DATABASE_PASSWORD }}' \
           && export MONGO_USER='${{ secrets.MONGO_USER }}' \
           && export MONGO_PASSWORD='${{ secrets.MONGO_PASSWORD }}' \
+          && docker ps -aq | xargs -r docker stop \
+          && docker ps -aq | xargs -r docker rm \
           && docker-compose down --remove-orphans \
+          && docker system prune -f \
           && docker-compose pull \
           && docker-compose up -d --force-recreate"
 
