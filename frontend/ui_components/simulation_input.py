@@ -58,19 +58,19 @@ class SimulationInputUI:
         streamlit.write("#### Peak number of bins per order")
         col1, col2 = streamlit.columns(2)
         inbound_bins_per_order = col1.number_input(
-            "Inbound bins per order", min_value=1, value=20, max_value=100
+            "Inbound bins per order", min_value=1, value=20, max_value=500
         )
         outbound_bins_per_order = col2.number_input(
-            "Outbound bins per order", min_value=1, value=20, max_value=100
+            "Outbound bins per order", min_value=1, value=20, max_value=500
         )
 
         streamlit.write("#### Peak number of orders per hour")
         col1, col2 = streamlit.columns(2)
         inbound_orders_per_hour = col1.number_input(
-            "Inbound orders per hour", min_value=1, value=10, max_value=500
+            "Inbound orders per hour", min_value=1, value=10, max_value=100
         )
         outbound_orders_per_hour = col2.number_input(
-            "Outbound orders per hour", min_value=1, value=10, max_value=500
+            "Outbound orders per hour", min_value=1, value=10, max_value=100
         )
 
         inbound_throughput = inbound_orders_per_hour * inbound_bins_per_order
