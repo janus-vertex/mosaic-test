@@ -299,13 +299,19 @@ class JobService:
         bins = []
         for i, quantity in enumerate(number_of_bins_per_layer):
             if quantity > 0:
-                bins.extend(
-                    self._get_bins_from_layers(
-                        quantity=quantity,
-                        min_layer=i + 1,
-                        max_layer=i + 1,
-                    )
+                bins_in_this_layer = self._get_bins_from_layers(
+                    min_layer=i + 1,
+                    max_layer=i + 1,
                 )
+                quantity_to_sample = min(quantity, len(bins_in_this_layer))
+                # Randomly sample bins from this layer
+                if quantity_to_sample > 0:
+                    sampled_indices = numpy.random.choice(
+                        len(bins_in_this_layer), size=quantity_to_sample, replace=False
+                    )
+                    sampled_bins = [bins_in_this_layer[i] for i in sampled_indices]
+                    bins.extend(sampled_bins)
+
                 time.sleep(delay)
 
         if len(bins) == 0:
@@ -325,19 +331,20 @@ class JobService:
         return unique_bins
 
     def _get_bins_from_layers(
-        self, quantity: int, min_layer: int, max_layer: int
+        self, min_layer: int, max_layer: int, quantity: int | None = None
     ) -> List[Dict[str, Any]]:
         """
         Get bins from layers.
 
         Parameters
         ----------
-        quantity : int
-            The number of bins to get
         min_layer : int
             The minimum layer to get bins from
         max_layer : int
             The maximum layer to get bins from
+        quantity : int, optional
+            The number of bins to get. Defaults to None, which means all bins in the
+            layers are returned.
 
         Returns
         -------
@@ -350,14 +357,16 @@ class JobService:
             empty list is returned.
         """
         try:
+            data = {
+                "minLayer": min_layer,
+                "maxLayer": max_layer,
+            }
+            if quantity is not None:
+                data["qty"] = quantity
             response = self._send_request(
                 url=f"{self.SM_BASE}/v3/storages/layer",
                 method="GET",
-                data={
-                    "qty": quantity,
-                    "minLayer": min_layer,
-                    "maxLayer": max_layer,
-                },
+                data=data,
             )
             return response.json()["data"]
 
