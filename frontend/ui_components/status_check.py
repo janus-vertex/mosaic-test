@@ -6,6 +6,8 @@ from core.config import (
     SM_BASE_2,
     TC_BASE_1,
     TC_BASE_2,
+    DASHBOARD_1,
+    DASHBOARD_2,
 )
 
 from frontend.core.simulation_requests import MosaicRequest
@@ -21,11 +23,13 @@ class StatusCheckUI:
         col1, col2 = streamlit.columns(2)
         with col1:
             streamlit.write("Server 1")
+            streamlit.link_button("Dashboard 1", DASHBOARD_1)
             self.check_if_simulation_is_running(
                 TC_base=TC_BASE_1, SM_base=SM_BASE_1, simulation_base=SIMULATION_BASE_1
             )
         with col2:
             streamlit.write("Server 2")
+            streamlit.link_button("Dashboard 2", DASHBOARD_2)
             self.check_if_simulation_is_running(
                 TC_base=TC_BASE_2, SM_base=SM_BASE_2, simulation_base=SIMULATION_BASE_2
             )
