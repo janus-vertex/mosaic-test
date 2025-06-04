@@ -49,8 +49,8 @@ class Parameter(Base):
     number_of_skycars = Column(Integer, nullable=True)
     inbound_handling_time = Column(Integer, nullable=True)
     outbound_handling_time = Column(Integer, nullable=True)
-    pareto_p = Column(Integer, nullable=True)
-    pareto_q = Column(Integer, nullable=True)
+    pareto_p = Column(Float, nullable=True)
+    pareto_q = Column(Float, nullable=True)
     number_of_bins = Column(Integer, nullable=True)
     stations_string = Column(String, nullable=True)
 

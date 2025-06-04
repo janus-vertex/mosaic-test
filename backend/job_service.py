@@ -244,6 +244,7 @@ class JobService:
         number_of_bins: int = 100,
         delay: float = 1.0,
         station_code: int = None,
+        max_retries: int = 20,
     ) -> List[Dict[str, Any]]:
         """
         Get bins from the order.
@@ -257,6 +258,8 @@ class JobService:
             second.
         station_code : int, optional
             The code of the station to append the bin call to. Defaults to None.
+        max_retries : int, optional
+            The maximum number of retries to get bins. Defaults to 20.
 
         Returns
         -------
@@ -275,50 +278,74 @@ class JobService:
         # Use pareto probabilities as weights to randomly sample layer indices
         weights = numpy.array(self.body.parameters.pareto_probabilities)
         weights = weights / weights.sum()
-        layer_indices = numpy.random.choice(
-            len(weights), size=number_of_bins, p=weights
-        )
 
-        # Count occurrences of each layer index
-        number_of_bins_per_layer = [
-            int(numpy.sum(layer_indices == i)) for i in range(len(weights))
-        ]
+        retry_count = 0
+        while retry_count < max_retries:
+            layer_indices = numpy.random.choice(
+                len(weights), size=number_of_bins, p=weights
+            )
 
-        self.simulation_database.log_action(
-            timestamp=time.time(),
-            simulation_run_id=self.simulation_run_id,
-            station_code=station_code,
-            action=f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
-        )
+            # Count occurrences of each layer index
+            number_of_bins_per_layer = [
+                int(numpy.sum(layer_indices == i)) for i in range(len(weights))
+            ]
 
-        print(
-            f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned"
-        )
+            self.simulation_database.log_action(
+                timestamp=time.time(),
+                simulation_run_id=self.simulation_run_id,
+                station_code=station_code,
+                action=f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
+            )
 
-        # Get bins from each layer
-        bins = []
-        for i, quantity in enumerate(number_of_bins_per_layer):
-            if quantity > 0:
-                bins_in_this_layer = self._get_bins_from_layers(
-                    min_layer=i + 1,
-                    max_layer=i + 1,
-                )
-                quantity_to_sample = min(quantity, len(bins_in_this_layer))
-                # Randomly sample bins from this layer
-                if quantity_to_sample > 0:
-                    sampled_indices = numpy.random.choice(
-                        len(bins_in_this_layer), size=quantity_to_sample, replace=False
+            print(
+                f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned"
+            )
+
+            # Get bins from each layer
+            bins = []
+            for i, quantity in enumerate(number_of_bins_per_layer):
+                if quantity > 0:
+                    bins_in_this_layer = self._get_bins_from_layers(
+                        min_layer=i + 1,
+                        max_layer=i + 1,
+                        station_code=station_code,
                     )
-                    sampled_bins = [bins_in_this_layer[i] for i in sampled_indices]
-                    bins.extend(sampled_bins)
+                    quantity_to_sample = min(quantity, len(bins_in_this_layer))
+                    # Randomly sample bins from this layer
+                    if quantity_to_sample > 0:
+                        sampled_indices = numpy.random.choice(
+                            len(bins_in_this_layer),
+                            size=quantity_to_sample,
+                            replace=False,
+                        )
+                        sampled_bins = [bins_in_this_layer[i] for i in sampled_indices]
+                        bins.extend(sampled_bins)
 
-                time.sleep(delay)
+                    time.sleep(delay)
+
+            if len(bins) > 0:
+                break
+
+            self.simulation_database.log_action(
+                timestamp=time.time(),
+                simulation_run_id=self.simulation_run_id,
+                station_code=station_code,
+                action=f"No bins at all. Retry loop {retry_count}",
+            )
+            retry_count += 1
 
         if len(bins) == 0:
-            raise SimulationBackendException(
-                "No bins are available. Either they are physically unavailble, or API "
-                + "is down."
+            error = (
+                f"No bins available after {max_retries} retries. Either they are "
+                + "physically unavailable, or API is down."
             )
+            self.simulation_database.log_action(
+                timestamp=time.time(),
+                simulation_run_id=self.simulation_run_id,
+                station_code=station_code,
+                action=f"ERROR - {error}",
+            )
+            raise SimulationBackendException(error)
 
         # Make sure the bin codes are unique. Only keep the first occurrence of each bin.
         unique_bins = []
@@ -331,7 +358,11 @@ class JobService:
         return unique_bins
 
     def _get_bins_from_layers(
-        self, min_layer: int, max_layer: int, quantity: int | None = None
+        self,
+        min_layer: int,
+        max_layer: int,
+        quantity: int | None = None,
+        station_code: int | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Get bins from layers.
@@ -345,6 +376,8 @@ class JobService:
         quantity : int, optional
             The number of bins to get. Defaults to None, which means all bins in the
             layers are returned.
+        station_code : int, optional
+            The code of the station to append the bin call to. Defaults to None.
 
         Returns
         -------
@@ -371,6 +404,12 @@ class JobService:
             return response.json()["data"]
 
         except requests.exceptions.RequestException as e:
+            self.simulation_database.log_action(
+                timestamp=time.time(),
+                simulation_run_id=self.simulation_run_id,
+                station_code=station_code,
+                action=f"No bins available in layers ({min_layer}, {max_layer})",
+            )
             return []
 
     def _check_station_status(self, station_code: int) -> List[Dict[str, Any]]:
