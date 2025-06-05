@@ -10,6 +10,7 @@ from core.config import (
     SIMULATION_DATABASE_PASSWORD,
 )
 from urllib.parse import quote_plus
+import time
 
 Base = declarative_base()
 
@@ -53,6 +54,7 @@ class Parameter(Base):
     pareto_q = Column(Float, nullable=True)
     number_of_bins = Column(Integer, nullable=True)
     stations_string = Column(String, nullable=True)
+    timestamp = Column(Float, nullable=True)
 
 
 class SimulationDatabase:
@@ -88,7 +90,9 @@ class SimulationDatabase:
         Adds new simulation parameters to the parameters table.
         """
         try:
-            param = Parameter(**parameters, simulation_run_id=simulation_run_id)
+            param = Parameter(
+                **parameters, simulation_run_id=simulation_run_id, timestamp=time.time()
+            )
             self.session.add(param)
             self.session.commit()
             return param.id
@@ -169,19 +173,21 @@ class SimulationDatabase:
             print(f"Error retrieving logs: {e}")
             return pandas.DataFrame()
 
-    def get_parameters_by_simulation_run(self, simulation_run_id: int) -> pandas.DataFrame:
+    def get_parameters_by_simulation_run(
+        self, simulation_run_id: int
+    ) -> pandas.DataFrame:
         """
         Retrieves parameters for a specific simulation run.
 
         Parameters
-        ----------  
+        ----------
         simulation_run_id : int
             The ID of the simulation run
 
         Returns
         -------
         pandas.DataFrame
-            A DataFrame of parameters for the specified simulation run  
+            A DataFrame of parameters for the specified simulation run
         """
         try:
             query = text(
