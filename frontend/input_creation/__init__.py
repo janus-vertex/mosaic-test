@@ -6,3 +6,4 @@ from .input_buffer import InputBuffer
 from .input_jobs import InputJobs
 from .input_delay import InputDelay
 from .input_database import InputDatabase
+from .input_optimisation import InputOptimisation

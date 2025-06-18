@@ -33,6 +33,7 @@ class InputDatabase:
             input_zones_and_stations=input_zones_and_stations,
             input_simulation=input_simulation,
         )
+        self.duration_string = simulation_input_ui.duration_string
 
     def _encode_stations(
         self,

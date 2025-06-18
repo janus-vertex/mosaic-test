@@ -1,5 +1,7 @@
+import math
 import time
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone, timedelta
 
 import numpy
 import requests
@@ -36,11 +38,13 @@ class Station:
         type: str,
         bins: List[Dict[str, Any]] = [],
         next_job_time: float = 0,
+        advance_order_name: str = None,
     ):
         self.code = code
         self.type = type
         self.bins = bins
         self.next_job_time = next_job_time
+        self.advance_order_name = advance_order_name
 
 
 class JobService:
@@ -82,11 +86,7 @@ class JobService:
         )
 
         # Create the first log entry to indicate the start of the simulation
-        self.simulation_database.log_action(
-            timestamp=simulation_start_time,
-            simulation_run_id=self.simulation_run_id,
-            action="Simulation start",
-        )
+        self._log("Simulation starts", timestamp=simulation_start_time)
 
         # Create a list of station instances from stations in the request
         station_list = [
@@ -94,44 +94,125 @@ class JobService:
             for station in self.body.stations
         ]
 
+        # Create a list of operation types and their corresponding durations
+        operations = [
+            (
+                "".join(c for c in segment if c.isalpha()),
+                int("".join(c for c in segment if c.isdigit())),
+            )
+            for segment in self.body.configuration.duration_string.split(";")
+        ]
+
         # Initialize current time and check time interval
-        current_time = time.time()
-        next_check_time = current_time
+        next_check_time = time.time()
         check_time_interval = 1.0
+
+        current_operation_index = 0
+        normal_operation_loop_index = 0
+
+        inbound_advance_orders = {}
+        outbound_advance_orders = {}
 
         # Main loop that runs until the stop request is made or the simulation duration
         # is reached
         while (
             not self.status["stop_requested"]
-            and current_time
+            and time.time()
             <= simulation_start_time + self.body.configuration.duration_in_seconds
         ):
-            current_time = time.time()
+            loop_start_time = time.time()
 
-            if current_time >= next_check_time:
+            # Break the loop if the simulation duration is reached. In theory this is not
+            # needed as the condition in while loop should take care of breaking when
+            # simulation is ended, but just in case
+            if current_operation_index >= len(operations):
+                break
+
+            current_operation_type, current_operation_duration = operations[
+                current_operation_index
+            ]
+
+            # Advance order
+            if current_operation_type == "AO" and loop_start_time >= next_check_time:
+                self._log("Advance order starts")
+
+                # Find the bins to be called for advance orders
+                number_of_inbound_orders_for_AO = math.ceil(
+                    self.body.parameters.inbound_orders_per_hour
+                    * (current_operation_duration / 3600)
+                )
+                number_of_outbound_orders_for_AO = math.ceil(
+                    self.body.parameters.outbound_orders_per_hour
+                    * (current_operation_duration / 3600)
+                )
+
+                self._log(
+                    f"Number of inbound advance orders: {number_of_inbound_orders_for_AO}"
+                )
+                inbound_advance_orders = self._create_advance_orders(
+                    number_of_orders=number_of_inbound_orders_for_AO,
+                    number_of_bins_per_order=self.body.parameters.inbound_bins_per_order,
+                )
+
+                self._log(
+                    f"Number of outbound advance orders: {number_of_outbound_orders_for_AO}"
+                )
+                outbound_advance_orders = self._create_advance_orders(
+                    number_of_orders=number_of_outbound_orders_for_AO,
+                    number_of_bins_per_order=self.body.parameters.outbound_bins_per_order,
+                )
+
+                # Submit advance orders to SM
+                self._submit_advance_orders(
+                    orders=inbound_advance_orders | outbound_advance_orders
+                )
+
+                next_check_time = loop_start_time + current_operation_duration
+                current_operation_index += 1
+
+                self._log(f"Advance order ends in {current_operation_duration} seconds")
+
+            # Normal operation
+            elif current_operation_type == "N" and loop_start_time >= next_check_time:
+
+                if normal_operation_loop_index == 0:
+                    normal_operation_start_time = loop_start_time
+                    self._log("Normal operation starts")
+
                 for station in station_list:
-                    # If there are no more bins for the station, find new bins and call
-                    # them from the matrix
+                    advance_orders = (
+                        inbound_advance_orders
+                        if station.type == "I"
+                        else outbound_advance_orders
+                    )
+
                     if len(station.bins) == 0:
-                        number_of_bins = self._get_number_of_bins_per_order(
-                            station_type=station.type
-                        )
-                        station.bins = self._get_bins_from_order(
-                            number_of_bins=number_of_bins, station_code=station.code
-                        )
+                        if len(advance_orders) > 0:
+                            # Get the first advance order from the dictionary
+                            order_name = next(iter(advance_orders))
+                            station.bins = advance_orders[order_name]
+                            advance_orders.pop(order_name)
+
+                            station.advance_order_name = order_name
+
+                        # If there are no more bins for the station, find new bins and call
+                        # them from the matrix
+                        else:
+                            number_of_bins = self._get_number_of_bins_per_order(
+                                station_type=station.type
+                            )
+                            station.bins = self._get_bins_from_order(
+                                number_of_bins=number_of_bins, station_code=station.code
+                            )
+                            station.advance_order_name = None
 
                         # Call bins from matrix to the station
                         bin_ids = [bin["code"] for bin in station.bins]
-                        _ = self._call_bins(station_code=station.code, bin_ids=bin_ids)
-
-                        self.simulation_database.log_action(
-                            timestamp=time.time(),
-                            simulation_run_id=self.simulation_run_id,
+                        _ = self._call_bins(
                             station_code=station.code,
-                            action=f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}",
+                            bin_ids=bin_ids,
+                            advance_order_name=station.advance_order_name,
                         )
-
-                        print(f"{current_time=}, {station.code=}, {bin_ids=} called")
 
                     # Check station status at intervals to see if a bin is at station
                     station_status = self._check_station_status(station.code)
@@ -147,20 +228,18 @@ class JobService:
                     # If a bin is at station and the time to store the bin has come
                     if (
                         status_with_bin_at_station is not None
-                        and current_time >= station.next_job_time
+                        and time.time() >= station.next_job_time
                     ):
                         # Store the bin at station back to matrix
                         bin_id = status_with_bin_at_station["code"]
-                        _ = self._store_bin(station_code=station.code, bin_id=bin_id)
-
-                        self.simulation_database.log_action(
-                            timestamp=time.time(),
-                            simulation_run_id=self.simulation_run_id,
+                        _ = self._store_bin(
                             station_code=station.code,
-                            bin_code=bin_id,
-                            action="Bin stored",
+                            bin_id=bin_id,
+                            advance_order_name=station.advance_order_name,
                         )
-                        print(f"{current_time=}, {station.code=}, {bin_id=} stored")
+                        self._log(
+                            f"Bin stored", station_code=station.code, bin_code=bin_id
+                        )
 
                         # Add delay to the next job time
                         delay = (
@@ -168,7 +247,7 @@ class JobService:
                             if station.type == "I"
                             else self.body.parameters.outbound_time
                         )
-                        station.next_job_time = current_time + delay
+                        station.next_job_time = time.time() + delay
 
                         # Remove the stored bin from the list of bins assigned to the
                         # station
@@ -184,23 +263,29 @@ class JobService:
 
                         station.bins.remove(bin_to_remove)
 
-                next_check_time = current_time + check_time_interval
+                next_check_time = loop_start_time + check_time_interval
+                normal_operation_loop_index += 1
+
+                if (
+                    time.time()
+                    >= normal_operation_start_time + current_operation_duration
+                ):
+                    normal_operation_loop_index = 0
+                    current_operation_index += 1
+                    self._log("Normal operation ends")
 
             # Sleep for 0.5 seconds to avoid busy-waiting
             time.sleep(0.5)
 
         # Create the last log entry to indicate the end of the simulation
-        self.status["stop_time"] = current_time
-        self.simulation_database.log_action(
-            timestamp=current_time,
-            simulation_run_id=self.simulation_run_id,
-            action="Simulation end",
-        )
+        simulation_end_time = time.time()
+        self.status["stop_time"] = simulation_end_time
+        self._log("Simulation ends", timestamp=simulation_end_time)
 
         # Update the simulation run end timestamp
         self.simulation_database.update_simulation_run_timestamp(
             simulation_run_id=self.simulation_run_id,
-            end_timestamp=current_time,
+            end_timestamp=simulation_end_time,
         )
 
         # Close the simulation database connection
@@ -208,6 +293,35 @@ class JobService:
 
         # Stop TC to effectively stop everything
         _ = self._tc_stop()
+
+    def _create_advance_orders(
+        self, number_of_orders: int, number_of_bins_per_order: int
+    ) -> Dict[str, List[Dict[str, Any]]]:
+
+        orders = {
+            str(numpy.random.randint(1, 1000000000)): self._get_bins_from_order(
+                number_of_bins=number_of_bins_per_order
+            )
+            for _ in range(number_of_orders)
+        }
+
+        return orders
+
+    def _submit_advance_orders(self, orders: Dict[str, List[Dict[str, Any]]]):
+        for order_name, order in orders.items():
+            storages = [{"code": bin["code"]} for bin in order]
+            self._send_request(
+                url=f"{self.SM_BASE}/v3/advanced-orders/upsert",
+                method="POST",
+                data={
+                    "orderNo": order_name,
+                    "storages": storages,
+                },
+            )
+
+            bin_ids = [bin["code"] for bin in order]
+            self._log(f"Advance order {order_name} submitted. Bin IDs: {bin_ids}")
+            time.sleep(1)
 
     def _get_number_of_bins_per_order(self, station_type: str) -> int:
         """
@@ -289,16 +403,9 @@ class JobService:
             number_of_bins_per_layer = [
                 int(numpy.sum(layer_indices == i)) for i in range(len(weights))
             ]
-
-            self.simulation_database.log_action(
-                timestamp=time.time(),
-                simulation_run_id=self.simulation_run_id,
+            self._log(
+                f"Number of bins per layer to be assigned: {number_of_bins_per_layer}",
                 station_code=station_code,
-                action=f"No bins assigned. Number of bins per layer: {number_of_bins_per_layer}",
-            )
-
-            print(
-                f"current_time={time.time()}, {station_code=}, {number_of_bins_per_layer=} assigned"
             )
 
             # Get bins from each layer
@@ -326,11 +433,8 @@ class JobService:
             if len(bins) > 0:
                 break
 
-            self.simulation_database.log_action(
-                timestamp=time.time(),
-                simulation_run_id=self.simulation_run_id,
-                station_code=station_code,
-                action=f"No bins at all. Retry loop {retry_count}",
+            self._log(
+                f"No bins at all. Retry loop {retry_count}", station_code=station_code
             )
             retry_count += 1
 
@@ -339,12 +443,7 @@ class JobService:
                 f"No bins available after {max_retries} retries. Either they are "
                 + "physically unavailable, or API is down."
             )
-            self.simulation_database.log_action(
-                timestamp=time.time(),
-                simulation_run_id=self.simulation_run_id,
-                station_code=station_code,
-                action=f"ERROR - {error}",
-            )
+            self._log(f"ERROR - {error}", station_code=station_code)
             raise SimulationBackendException(error)
 
         # Make sure the bin codes are unique. Only keep the first occurrence of each bin.
@@ -404,11 +503,9 @@ class JobService:
             return response.json()["data"]
 
         except requests.exceptions.RequestException as e:
-            self.simulation_database.log_action(
-                timestamp=time.time(),
-                simulation_run_id=self.simulation_run_id,
+            self._log(
+                f"No bins available in layers ({min_layer}, {max_layer})",
                 station_code=station_code,
-                action=f"No bins available in layers ({min_layer}, {max_layer})",
             )
             return []
 
@@ -434,7 +531,12 @@ class JobService:
         )
         return response.json()["data"]
 
-    def _call_bins(self, station_code: int, bin_ids: List[int]) -> Dict[str, Any]:
+    def _call_bins(
+        self,
+        station_code: int,
+        bin_ids: List[int],
+        advance_order_name: str | None = None,
+    ) -> Dict[str, Any]:
         """
         Call bins from matrix to the station.
 
@@ -450,6 +552,14 @@ class JobService:
         Dict[str, Any]
             The response from the server
         """
+        log_msg = (
+            ""
+            if advance_order_name is None
+            else f"Advance order {advance_order_name}. "
+        )
+        log_msg += f"{len(bin_ids)} bins called. Bin IDs: {bin_ids}"
+
+        self._log(log_msg, station_code=station_code)
         response = self._send_request(
             url=f"{self.SM_BASE}/v3/operations/call",
             method="POST",
@@ -457,7 +567,9 @@ class JobService:
         )
         return response.json()
 
-    def _store_bin(self, station_code: int, bin_id: int) -> Dict[str, Any]:
+    def _store_bin(
+        self, station_code: int, bin_id: int, advance_order_name: str = None
+    ) -> Dict[str, Any]:
         """
         Store a bin at the station back to matrix.
 
@@ -473,13 +585,14 @@ class JobService:
         Dict[str, Any]
             The response from the server
         """
+        data = {"station": station_code, "storage": bin_id}
+        if advance_order_name is not None:
+            data["advancedOrdersToComplete"] = [advance_order_name]
+
         response = self._send_request(
             url=f"{self.SM_BASE}/v3/operations/store",
             method="POST",
-            data={
-                "station": station_code,
-                "storage": bin_id,
-            },
+            data=data,
         )
         return response.json()
 
@@ -492,6 +605,31 @@ class JobService:
             },
         )
         return response
+
+    def _log(
+        self,
+        log_message: str,
+        station_code: int | None = None,
+        bin_code: int | None = None,
+        timestamp: float | None = None,
+    ):
+        self.simulation_database.log_action(
+            timestamp=timestamp if timestamp is not None else time.time(),
+            simulation_run_id=self.simulation_run_id,
+            station_code=station_code,
+            bin_code=bin_code,
+            action=log_message,
+        )
+
+        utc8_tz = timezone(timedelta(hours=8))
+        timestamp_dt = datetime.fromtimestamp(
+            timestamp if timestamp is not None else time.time(), tz=utc8_tz
+        )
+        readable_timestamp = timestamp_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        station_msg = f" - station={station_code}" if station_code is not None else ""
+        bin_msg = f" - bin={bin_code}" if bin_code is not None else ""
+        print(f"{readable_timestamp}{station_msg}{bin_msg} - {log_message}")
 
     @staticmethod
     def _send_request(

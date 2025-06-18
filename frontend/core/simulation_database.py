@@ -55,6 +55,7 @@ class Parameter(Base):
     number_of_bins = Column(Integer, nullable=True)
     stations_string = Column(String, nullable=True)
     timestamp = Column(Float, nullable=True)
+    duration_string = Column(String, nullable=True)
 
 
 class SimulationDatabase:

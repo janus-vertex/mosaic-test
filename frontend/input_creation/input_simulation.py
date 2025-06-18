@@ -26,6 +26,8 @@ class InputSimulation:
             outbound_time=simulation_input_ui.outbound_time,
             inbound_bins_per_order=simulation_input_ui.inbound_bins_per_order,
             outbound_bins_per_order=simulation_input_ui.outbound_bins_per_order,
+            inbound_orders_per_hour=simulation_input_ui.inbound_orders_per_hour,
+            outbound_orders_per_hour=simulation_input_ui.outbound_orders_per_hour,
             pareto_probabilities=simulation_input_ui.pareto_probabilities,
         )
 
@@ -38,6 +40,7 @@ class InputSimulation:
             name=simulation_input_ui.simulation_name,
             duration_in_seconds=simulation_input_ui.simulation_duration_in_seconds,
             server_number=server_number,
+            duration_string=simulation_input_ui.duration_string,
         )
 
     def _create_stations(self, grid_designer_ui: GridDesignerUI):
@@ -91,12 +94,16 @@ class InputParameters:
         outbound_time: int,
         inbound_bins_per_order: int,
         outbound_bins_per_order: int,
+        inbound_orders_per_hour: int,
+        outbound_orders_per_hour: int,
         pareto_probabilities: List[float],
     ):
         self.inbound_time = inbound_time
         self.outbound_time = outbound_time
         self.inbound_bins_per_order = inbound_bins_per_order
         self.outbound_bins_per_order = outbound_bins_per_order
+        self.inbound_orders_per_hour = inbound_orders_per_hour
+        self.outbound_orders_per_hour = outbound_orders_per_hour
         self.pareto_probabilities = pareto_probabilities
 
 
@@ -106,10 +113,12 @@ class InputConfiguration:
         name: str,
         duration_in_seconds: int,
         server_number: int,
+        duration_string: str,
     ):
         self.name = name
         self.duration_in_seconds = duration_in_seconds
         self.server_number = server_number
+        self.duration_string = duration_string
 
         # To be updated by the database
         self.id = None
