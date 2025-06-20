@@ -18,7 +18,6 @@ class InputDatabase:
     ):
 
         self.simulation_name = simulation_input_ui.simulation_name
-        self.simulation_duration = simulation_input_ui.simulation_duration_in_seconds
         self.inbound_bins_per_order = simulation_input_ui.inbound_bins_per_order
         self.outbound_bins_per_order = simulation_input_ui.outbound_bins_per_order
         self.inbound_orders_per_hour = simulation_input_ui.inbound_orders_per_hour

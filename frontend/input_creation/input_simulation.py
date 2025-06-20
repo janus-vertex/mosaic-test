@@ -38,7 +38,6 @@ class InputSimulation:
     ):
         self.configuration = InputConfiguration(
             name=simulation_input_ui.simulation_name,
-            duration_in_seconds=simulation_input_ui.simulation_duration_in_seconds,
             server_number=server_number,
             duration_string=simulation_input_ui.duration_string,
         )
@@ -111,12 +110,10 @@ class InputConfiguration:
     def __init__(
         self,
         name: str,
-        duration_in_seconds: int,
         server_number: int,
         duration_string: str,
     ):
         self.name = name
-        self.duration_in_seconds = duration_in_seconds
         self.server_number = server_number
         self.duration_string = duration_string
 

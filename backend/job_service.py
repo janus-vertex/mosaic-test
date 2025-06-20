@@ -1,7 +1,7 @@
 import math
 import time
-from typing import Any, Dict, List, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy
 import requests
@@ -84,6 +84,7 @@ class JobService:
             simulation_run_id=self.simulation_run_id,
             start_timestamp=simulation_start_time,
         )
+        self.simulation_start_time = simulation_start_time
 
         # Create the first log entry to indicate the start of the simulation
         self._log("Simulation starts", timestamp=simulation_start_time)
@@ -95,7 +96,7 @@ class JobService:
         ]
 
         # Create a list of operation types and their corresponding durations
-        operations = [
+        self.operations = [
             (
                 "".join(c for c in segment if c.isalpha()),
                 int("".join(c for c in segment if c.isdigit())),
@@ -107,49 +108,65 @@ class JobService:
         next_check_time = time.time()
         check_time_interval = 1.0
 
-        current_operation_index = 0
+        # current_operation_index = 0
         normal_operation_loop_index = 0
 
         inbound_advance_orders = {}
         outbound_advance_orders = {}
 
+        is_all_orders_completed = True
+        is_normal_operation_ending = False
+
+        total_simulation_duration = sum(operation[1] for operation in self.operations)
+
         # Main loop that runs until the stop request is made or the simulation duration
         # is reached
         while (
             not self.status["stop_requested"]
-            and time.time()
-            <= simulation_start_time + self.body.configuration.duration_in_seconds
+            and time.time() <= simulation_start_time + total_simulation_duration
         ):
             loop_start_time = time.time()
 
-            # Break the loop if the simulation duration is reached. In theory this is not
-            # needed as the condition in while loop should take care of breaking when
-            # simulation is ended, but just in case
-            if current_operation_index >= len(operations):
-                break
+            # # Break the loop if the simulation duration is reached. In theory this is not
+            # # needed as the condition in while loop should take care of breaking when
+            # # simulation is ended, but just in case
+            # if current_operation_index >= len(operations):
+            #     break
 
-            current_operation_type, current_operation_duration = operations[
-                current_operation_index
-            ]
+            current_operation, current_operation_index = self._get_current_operation()
+            current_operation_type, current_operation_duration = current_operation
 
             # Advance order
-            if current_operation_type == "AO" and loop_start_time >= next_check_time:
+            if (
+                current_operation_type == "AO"
+                and is_all_orders_completed
+                and loop_start_time >= next_check_time
+            ):
                 self._log("Advance order starts")
+
+                remaining_duration = max(
+                    simulation_start_time
+                    + self._get_duration_up_to_current_operation(
+                        current_operation_index
+                    )
+                    - time.time(),
+                    1,
+                )
 
                 # Find the bins to be called for advance orders
                 number_of_inbound_orders_for_AO = math.ceil(
                     self.body.parameters.inbound_orders_per_hour
-                    * (current_operation_duration / 3600)
+                    * (remaining_duration / 3600)
                 )
                 number_of_outbound_orders_for_AO = math.ceil(
                     self.body.parameters.outbound_orders_per_hour
-                    * (current_operation_duration / 3600)
+                    * (remaining_duration / 3600)
                 )
 
                 self._log(
                     f"Number of inbound advance orders: {number_of_inbound_orders_for_AO}"
                 )
-                inbound_advance_orders = self._create_advance_orders(
+                new_inbound_advance_orders = self._create_advance_orders(
                     number_of_orders=number_of_inbound_orders_for_AO,
                     number_of_bins_per_order=self.body.parameters.inbound_bins_per_order,
                 )
@@ -157,26 +174,39 @@ class JobService:
                 self._log(
                     f"Number of outbound advance orders: {number_of_outbound_orders_for_AO}"
                 )
-                outbound_advance_orders = self._create_advance_orders(
+                new_outbound_advance_orders = self._create_advance_orders(
                     number_of_orders=number_of_outbound_orders_for_AO,
                     number_of_bins_per_order=self.body.parameters.outbound_bins_per_order,
                 )
 
                 # Submit advance orders to SM
                 self._submit_advance_orders(
-                    orders=inbound_advance_orders | outbound_advance_orders
+                    orders=new_inbound_advance_orders | new_outbound_advance_orders
                 )
 
-                next_check_time = loop_start_time + current_operation_duration
-                current_operation_index += 1
+                # Update the advance orders
+                inbound_advance_orders |= new_inbound_advance_orders
+                outbound_advance_orders |= new_outbound_advance_orders
 
-                self._log(f"Advance order ends in {current_operation_duration} seconds")
+                next_check_time = (
+                    simulation_start_time
+                    + self._get_duration_up_to_current_operation(
+                        current_operation_index
+                    )
+                )
+                # current_operation_index += 1
+
+                self._log(
+                    f"Advance order ends in {int(next_check_time - time.time())} seconds"
+                )
 
             # Normal operation
-            elif current_operation_type == "N" and loop_start_time >= next_check_time:
-
-                if normal_operation_loop_index == 0:
+            elif (
+                current_operation_type == "N" or not is_all_orders_completed
+            ) and loop_start_time >= next_check_time:
+                if normal_operation_loop_index == 0 and current_operation_type == "N":
                     normal_operation_start_time = loop_start_time
+                    is_normal_operation_ending = False
                     self._log("Normal operation starts")
 
                 for station in station_list:
@@ -186,7 +216,7 @@ class JobService:
                         else outbound_advance_orders
                     )
 
-                    if len(station.bins) == 0:
+                    if len(station.bins) == 0 and current_operation_type == "N":
                         if len(advance_orders) > 0:
                             # Get the first advance order from the dictionary
                             order_name = next(iter(advance_orders))
@@ -213,6 +243,9 @@ class JobService:
                             bin_ids=bin_ids,
                             advance_order_name=station.advance_order_name,
                         )
+
+                    if len(station.bins) == 0:
+                        continue
 
                     # Check station status at intervals to see if a bin is at station
                     station_status = self._check_station_status(station.code)
@@ -264,15 +297,28 @@ class JobService:
                         station.bins.remove(bin_to_remove)
 
                 next_check_time = loop_start_time + check_time_interval
-                normal_operation_loop_index += 1
+                normal_operation_loop_index += (
+                    1 if not is_normal_operation_ending else 0
+                )
+
+                is_all_orders_completed = (
+                    all(len(station.bins) == 0 for station in station_list)
+                    and current_operation_type != "N"
+                )
+
+                if is_all_orders_completed:
+                    self._log("All orders completed beyond normal operation.")
 
                 if (
                     time.time()
                     >= normal_operation_start_time + current_operation_duration
+                    and not is_normal_operation_ending
                 ):
                     normal_operation_loop_index = 0
-                    current_operation_index += 1
-                    self._log("Normal operation ends")
+                    self._log(
+                        "Normal operation ends. Completing remaining bins in existing orders."
+                    )
+                    is_normal_operation_ending = True
 
             # Sleep for 0.5 seconds to avoid busy-waiting
             time.sleep(0.5)
@@ -293,6 +339,22 @@ class JobService:
 
         # Stop TC to effectively stop everything
         _ = self._tc_stop()
+
+    def _get_current_operation(self) -> Tuple[Tuple[str, int], int]:
+        current_time_in_simulation = time.time() - self.simulation_start_time
+
+        cumulative_duration = 0
+        for i, operation in enumerate(self.operations):
+            cumulative_duration += operation[1]
+            if current_time_in_simulation < cumulative_duration:
+                return operation, i
+
+        return self.operations[-1], len(self.operations) - 1
+
+    def _get_duration_up_to_current_operation(
+        self, current_operation_index: int
+    ) -> int:
+        return sum(self.operations[i][1] for i in range(current_operation_index + 1))
 
     def _create_advance_orders(
         self, number_of_orders: int, number_of_bins_per_order: int
@@ -320,7 +382,10 @@ class JobService:
             )
 
             bin_ids = [bin["code"] for bin in order]
-            self._log(f"Advance order {order_name} submitted. Bin IDs: {bin_ids}")
+            self._log(
+                f"Advance order {order_name} submitted. {len(bin_ids)} bins. "
+                + f"Bin IDs: {bin_ids}"
+            )
             time.sleep(1)
 
     def _get_number_of_bins_per_order(self, station_type: str) -> int:

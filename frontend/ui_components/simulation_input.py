@@ -288,12 +288,6 @@ class SimulationInputUI:
         streamlit.plotly_chart(fig)
 
     def _store_durations(self, durations: pandas.DataFrame):
-
-        simulation_duration_in_seconds = (
-            durations["duration_in_minutes"].sum() * 60 if not durations.empty else 0
-        )
-        self.simulation_duration_in_seconds = simulation_duration_in_seconds
-
         operation_ranges = []
         current_type = None
         current_duration = 0
