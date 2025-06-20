@@ -39,7 +39,7 @@ class SimulationInputUI:
             "Simulation duration (add more rows to include different operation types)"
         )
         duration_df = pandas.DataFrame(
-            {"duration_in_minutes": [60], "type": ["Normal"]}
+            {"duration_in_minutes": [30], "type": ["Normal"]}
         )
         durations = streamlit.data_editor(
             duration_df,
