@@ -1,12 +1,9 @@
-import math
-from typing import List
-
 import streamlit
 from core.parameters import Parameters
 from input_creation.input_buffer import InputBuffer
 from input_creation.input_database import InputDatabase
 from input_creation.input_delay import InputDelay
-from input_creation.input_jobs import InputJobs
+from input_creation.input_optimisation import InputOptimisation
 from input_creation.input_simulation import InputSimulation
 from input_creation.input_skycar import InputSkyCarSetup
 from input_creation.input_sm_obstacles import InputSMObstacles
@@ -61,6 +58,7 @@ class SimulationPreparationUI:
             input_zones_and_stations=input_zones_and_stations,
             input_simulation=input_simulation,
         )
+        input_optimisation = InputOptimisation()
 
         # Option to show request files
         is_show_files = streamlit.checkbox("Show request files")
@@ -101,6 +99,12 @@ class SimulationPreparationUI:
                     json_data=json_data, file_name="reset-delay.json"
                 )
 
+            with streamlit.expander("reset-optimisation.json: Bin optimisation"):
+                json_data = input_optimisation.to_json()
+                self._show_individual_json_file(
+                    json_data=json_data, file_name="reset-optimisation.json"
+                )
+
             with streamlit.expander("reset-simulation.json: Simulation"):
                 json_data = input_simulation.to_json()
                 self._show_individual_json_file(
@@ -119,6 +123,7 @@ class SimulationPreparationUI:
         self.input_skycar_setup = input_skycar_setup
         self.input_tc_obstacles = input_tc_obstacles
         self.input_delay = input_delay
+        self.input_optimisation = input_optimisation
         self.input_simulation = input_simulation
         self.input_database = input_database
         self.server_number = server_number

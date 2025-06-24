@@ -6,8 +6,8 @@ from pydantic import BaseModel
 class Configuration(BaseModel):
     id: int
     name: str
-    duration_in_seconds: int
     server_number: int
+    duration_string: str
 
 
 class Station(BaseModel):
@@ -20,6 +20,8 @@ class Parameters(BaseModel):
     outbound_time: int
     inbound_bins_per_order: int
     outbound_bins_per_order: int
+    inbound_orders_per_hour: int
+    outbound_orders_per_hour: int
     pareto_probabilities: List[float]
 
 

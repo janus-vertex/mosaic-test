@@ -5,6 +5,7 @@ import streamlit
 from core.pareto import ParetoCalculator
 from ui_components.grid_designer import GridDesignerUI
 import plotly.graph_objects as go
+import pandas
 
 
 class SimulationInputUI:
@@ -20,8 +21,8 @@ class SimulationInputUI:
 
         streamlit.write("#### General settings")
         is_success = True
-        col1, col2 = streamlit.columns(2)
-        simulation_name = col1.text_input(
+
+        simulation_name = streamlit.text_input(
             "Simulation name (default name is given if left blank)", value="default-sim"
         )
         # Validate simulation name - only alphanumeric characters, dashes, and underscores allowed
@@ -30,30 +31,44 @@ class SimulationInputUI:
         ):
             streamlit.error(
                 "Simulation name must contain only alphanumeric characters, dashes, or underscores.",
-                icon=f"❌",
+                icon="❌",
             )
             is_success = False
 
-        simulation_duration = col2.selectbox(
-            "Approximate simulation duration",
-            options=[
-                "10 minutes",
-                "30 minutes",
-                "1 hour",
-                "2 hours",
-                "4 hours",
-                "8 hours",
-            ],
+        streamlit.text(
+            "Simulation duration (add more rows to include different operation types)"
         )
-        duration_mapping = {
-            "10 minutes": 600,
-            "30 minutes": 1800,
-            "1 hour": 3600,
-            "2 hours": 7200,
-            "4 hours": 14400,
-            "8 hours": 28800,
-        }
-        simulation_duration_in_seconds = duration_mapping[simulation_duration]
+        duration_df = pandas.DataFrame(
+            {"duration_in_minutes": [30], "type": ["Normal"]}
+        )
+        durations = streamlit.data_editor(
+            duration_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "duration_in_minutes": streamlit.column_config.NumberColumn(
+                    "Duration (minutes; multiple of 10)",
+                    min_value=10,
+                    max_value=1440,
+                    step=10,
+                    required=True,
+                    width="medium",
+                ),
+                "type": streamlit.column_config.SelectboxColumn(
+                    "Operation Type",
+                    options=["Advance Order", "Normal"],
+                    required=True,
+                    width="medium",
+                ),
+            },
+            column_order=["duration_in_minutes", "type"],
+        )
+        if durations.empty:
+            streamlit.error("Simulation duration must be provided.", icon="❌")
+            is_success = False
+
+        self._display_durations(durations)
+        self._store_durations(durations)
 
         streamlit.write("#### Peak number of bins per order")
         col1, col2 = streamlit.columns(2)
@@ -129,7 +144,6 @@ class SimulationInputUI:
         self._show_bin_distribution_plot(pareto_p, pareto_q)
 
         # Assign values for later use
-        self.simulation_duration_in_seconds = simulation_duration_in_seconds
         self.simulation_name = simulation_name
         self.inbound_bins_per_order = inbound_bins_per_order
         self.outbound_bins_per_order = outbound_bins_per_order
@@ -195,3 +209,109 @@ class SimulationInputUI:
         streamlit.plotly_chart(fig)
 
         self.pareto_probabilities = [i / 100 for i in probabilities_percent]
+
+    def _display_durations(self, durations: pandas.DataFrame):
+
+        if durations.empty:
+            return
+
+        fig = go.Figure()
+
+        max_time = durations["duration_in_minutes"].sum()
+        # Add base line for full duration
+        fig.add_trace(
+            go.Scatter(
+                x=[0, max_time],
+                y=[1, 1],
+                mode="lines",
+                line=dict(width=8, color="#0068c9"),
+                name="Normal",
+            )
+        )
+        # Add red segments for each advance order
+        for i in range(len(durations)):
+            if durations.iloc[i]["type"] == "Advance Order":
+                start = durations.iloc[:i]["duration_in_minutes"].sum()
+                end = durations.iloc[: i + 1]["duration_in_minutes"].sum()
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=[start, end],
+                        y=[1, 1],
+                        mode="lines",
+                        line=dict(width=8, color="#ffabab"),
+                        name="",
+                    )
+                )
+
+        # Add markers for min and max points
+        fig.add_trace(
+            go.Scatter(
+                x=[0, max_time],
+                y=[1, 1],
+                mode="markers",
+                marker=dict(size=20, color="#83c9ff"),
+                showlegend=False,
+                name="",
+            )
+        )
+
+        # Update layout
+        hours = int(max_time // 60)
+        minutes = int(max_time % 60)
+
+        hours_text = f"{hours}h" if hours > 0 else ""
+        minutes_text = f"{minutes}m" if minutes > 0 else ""
+        duration_text = f"Total: {hours_text} {minutes_text}"
+
+        fig.update_layout(
+            title="Simulation Operation Time Range",
+            showlegend=False,
+            annotations=[
+                dict(
+                    text=duration_text,
+                    x=max_time,
+                    y=2.5,
+                    xref="x",
+                    yref="paper",
+                    showarrow=False,
+                    font=dict(size=14),
+                )
+            ],
+            yaxis=dict(
+                showticklabels=False, showgrid=False, zeroline=False, range=[0.9, 1.1]
+            ),
+            xaxis=dict(title="Minutes", zeroline=True),
+            height=200,
+        )
+
+        streamlit.plotly_chart(fig)
+
+    def _store_durations(self, durations: pandas.DataFrame):
+        operation_ranges = []
+        current_type = None
+        current_duration = 0
+        for _, row in durations.iterrows():
+            duration = row["duration_in_minutes"]
+            op_type = row["type"]
+
+            if current_type is None:
+                current_type = op_type
+                current_duration = duration
+            elif current_type == op_type:
+                current_duration += duration
+            else:
+                # Convert minutes to seconds and create range string
+                prefix = "AO" if current_type == "Advance Order" else "N"
+                operation_ranges.append(f"{prefix}{int(current_duration * 60)}")
+                current_type = op_type
+                current_duration = duration
+
+        # Add the last range
+        if current_type is not None:
+            prefix = "AO" if current_type == "Advance Order" else "N"
+            operation_ranges.append(f"{prefix}{int(current_duration * 60)}")
+
+        self.duration_string = ";".join(operation_ranges)
+
+        streamlit.write(self.duration_string)

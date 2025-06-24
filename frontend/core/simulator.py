@@ -148,6 +148,14 @@ class Simulator:
             data=self.simulation_preparation_ui.input_delay.to_json(type="dict"),
         )
         return response
+    
+    def _configure_optimisation(self) -> requests.Response:
+        response = MosaicRequest.send_request(
+            url=f"{self.SM_BASE}/v3/settings/storage-optimizer",
+            method="PUT",
+            data=self.simulation_preparation_ui.input_optimisation.to_json(type="dict"),
+        )
+        return response
 
     def _start_simulation(self) -> requests.Response:
         simulation_database = SimulationDatabase()
