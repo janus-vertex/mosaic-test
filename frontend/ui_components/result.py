@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-import pandas
 import plotly.graph_objects as go
 import streamlit
 from core.simulation_database import SimulationDatabase
@@ -26,7 +25,9 @@ class Station:
 
 class ResultUI:
     def __init__(self):
-        pass
+        # Initialize session state cache if it doesn't exist
+        if "simulation_cache" not in streamlit.session_state:
+            streamlit.session_state.simulation_cache = {}
 
     def show(self):
         streamlit.write("## Results")
@@ -54,90 +55,113 @@ class ResultUI:
                 date_range[1], datetime.max.time()
             ).timestamp()
 
-        # Get the list of simulation runs within the chosen date range
-        simulation_database = SimulationDatabase()
-        simulation_runs = simulation_database.get_simulation_runs_by_timestamp_range(
-            start_timestamp, end_timestamp
-        )
+        # Initialize connection objects
+        simulation_database = None
+        mongo_service = None
 
-        if len(simulation_runs) == 0:
-            streamlit.warning("No simulation runs found in the chosen date range.")
-            return
-
-        simulation_runs["name_to_display"] = (
-            simulation_runs["name"]
-            + " ➨ "
-            + simulation_runs["start_timestamp"].apply(
-                lambda x: datetime.fromtimestamp(
-                    x, tz=timezone(timedelta(hours=8))
-                ).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            # Get the list of simulation runs within the chosen date range
+            simulation_database = SimulationDatabase()
+            simulation_runs = (
+                simulation_database.get_simulation_runs_by_timestamp_range(
+                    start_timestamp, end_timestamp
+                )
             )
-            + " ➨ Server "
-            + simulation_runs["server_number"].astype(str)
-        )
 
-        # Choose a simulation from the list
-        simulation_chosen = streamlit.selectbox(
-            "Select simulation",
-            simulation_runs["name_to_display"].tolist(),
-            index=None,
-            placeholder="Choose a simulation...",
-        )
-        if simulation_chosen is None:
-            return
+            if len(simulation_runs) == 0:
+                streamlit.warning("No simulation runs found in the chosen date range.")
+                return
 
-        # Show a progress bar 
-        progress_bar = streamlit.progress(0)
-        status_text = streamlit.empty()
-        status_text.text("Please wait while the results are being loaded...")
+            simulation_runs["name_to_display"] = (
+                simulation_runs["name"]
+                + " ➨ "
+                + simulation_runs["start_timestamp"].apply(
+                    lambda x: datetime.fromtimestamp(
+                        x, tz=timezone(timedelta(hours=8))
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                )
+                + " ➨ Server "
+                + simulation_runs["server_number"].astype(str)
+            )
 
-        # Get the ID of the chosen simulation run
-        selected_simulation = simulation_runs[
-            simulation_runs["name_to_display"] == simulation_chosen
-        ]
-        simulation_run_id = selected_simulation["id"].iloc[0]
+            # Choose a simulation from the list
+            simulation_chosen = streamlit.selectbox(
+                "Select simulation",
+                simulation_runs["name_to_display"].tolist(),
+                index=None,
+                placeholder="Choose a simulation...",
+            )
+            if simulation_chosen is None:
+                return
 
-        # Get the logs of the chosen simulation run
-        self.logs = simulation_database.get_logs_by_simulation_run(simulation_run_id)
-        progress_bar.progress(12)
+            # Show a progress bar
+            progress_bar = streamlit.progress(0)
+            status_text = streamlit.empty()
+            status_text.text("Please wait while the results are being loaded...")
 
-        # Get the parameters of the chosen simulation run
-        simulation_parameters = simulation_database.get_parameters_by_simulation_run(
-            simulation_run_id
-        )
-        progress_bar.progress(25)
+            # Get the ID of the chosen simulation run
+            selected_simulation = simulation_runs[
+                simulation_runs["name_to_display"] == simulation_chosen
+            ]
+            simulation_run_id = selected_simulation["id"].iloc[0]
 
-        self.stations = self._parse_stations_from_string(
-            simulation_parameters["stations_string"].iloc[0]
-        )
-        progress_bar.progress(37)
+            # Check if simulation data is already cached in session state
+            cache_key = f"sim_{simulation_run_id}"
+            if cache_key in streamlit.session_state.simulation_cache:
+                cached_data = streamlit.session_state.simulation_cache[cache_key]
+                self.logs = cached_data["logs"]
+                self.movement_data = cached_data["movement_data"]
+            else:
+                # Load data from databases
+                self.logs = simulation_database.get_logs_by_simulation_run(
+                    simulation_run_id
+                )
 
-        log_start_timestamp = self.logs["timestamp"].min()
-        log_end_timestamp = self.logs["timestamp"].max()
-        self.duration_in_hours = (log_end_timestamp - log_start_timestamp) / 3600
-        progress_bar.progress(50)
+                # Connect to MongoDB to get movement data
+                mongo_service = MongoService(
+                    server_number=selected_simulation["server_number"].iloc[0]
+                )
+                self.movement_data = mongo_service.get_movement_data(
+                    start_timestamp=self.logs["timestamp"].min(),
+                    end_timestamp=self.logs["timestamp"].max(),
+                )
 
-        # Connect to MongoDB to get movement data
-        mongo_service = MongoService(
-            server_number=selected_simulation["server_number"].iloc[0]
-        )
-        progress_bar.progress(62)
+                # Cache the data in session state
+                streamlit.session_state.simulation_cache[cache_key] = {
+                    "logs": self.logs,
+                    "movement_data": self.movement_data,
+                }
 
-        self.movement_data = mongo_service.get_movement_data(
-            start_timestamp=log_start_timestamp, end_timestamp=log_end_timestamp
-        )
-        progress_bar.progress(75)
+            progress_bar.progress(50)
 
-        self._show_station_statistics()
-        progress_bar.progress(87)
+            log_start_timestamp = self.logs["timestamp"].min()
+            log_end_timestamp = self.logs["timestamp"].max()
+            self.duration_in_hours = (log_end_timestamp - log_start_timestamp) / 3600
 
-        self._show_handling_rate_statistics()
-        progress_bar.progress(100)
-        status_text.text("")
+            # Get the parameters of the chosen simulation run
+            simulation_parameters = (
+                simulation_database.get_parameters_by_simulation_run(simulation_run_id)
+            )
+            self.stations = self._parse_stations_from_string(
+                simulation_parameters["stations_string"].iloc[0]
+            )
 
-        # Close connections
-        simulation_database.close_connection()
-        mongo_service.close_connection()
+            progress_bar.progress(75)
+
+            self._show_station_statistics()
+            progress_bar.progress(83)
+
+            self._show_handling_rate_statistics()
+            progress_bar.progress(100)
+            status_text.text("")
+
+        # Clean up connections
+        finally:
+            if simulation_database is not None:
+                simulation_database.close_connection()
+
+            if mongo_service is not None:
+                mongo_service.close_connection()
 
     def _parse_stations_from_string(self, station_string: str) -> List[Station]:
         """
@@ -207,7 +231,6 @@ class ResultUI:
         return stations
 
     def _show_station_statistics(self):
-        # Filter logs for 'Bin stored' actions
         # Filter logs for 'Bin stored' actions and compute bin presentation rates in one step
         station_counts = (
             self.logs[self.logs["action"] == "Bin stored"]
