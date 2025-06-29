@@ -313,5 +313,3 @@ class SimulationInputUI:
             operation_ranges.append(f"{prefix}{int(current_duration * 60)}")
 
         self.duration_string = ";".join(operation_ranges)
-
-        streamlit.write(self.duration_string)
