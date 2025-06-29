@@ -139,8 +139,6 @@ class ResultUI:
 
             self._get_normal_operation_ranges()
 
-            self._show_simulation_durations()
-
             # Get the parameters of the chosen simulation run
             simulation_parameters = (
                 simulation_database.get_parameters_by_simulation_run(simulation_run_id)
@@ -151,14 +149,26 @@ class ResultUI:
 
             progress_bar.progress(75)
 
+            streamlit.write("#### Simulation durations")
+            self._show_simulation_durations()
+
+            streamlit.write("#### Bin presentation rate by station")
             is_normal_operation_only = streamlit.toggle(
-                "Show normal operation only", value=False
+                "Show normal operation only",
+                value=False,
+                key="bin_presentation_rate_by_station_toggle",
             )
             self._show_station_statistics(
                 is_normal_operation_only=is_normal_operation_only
             )
             progress_bar.progress(83)
 
+            streamlit.write("#### Bin handling rate by skycar")
+            is_normal_operation_only = streamlit.toggle(
+                "Show normal operation only",
+                value=False,
+                key="bin_handling_rate_by_skycar_toggle",
+            )
             self._show_handling_rate_statistics(
                 is_normal_operation_only=is_normal_operation_only
             )
@@ -263,7 +273,6 @@ class ResultUI:
         return stations
 
     def _show_simulation_durations(self):
-        streamlit.write("#### Simulation durations")
         col1, col2 = streamlit.columns(2)
         col1.metric(
             "Whole simulation",
@@ -358,7 +367,6 @@ class ResultUI:
         )
 
         fig.update_layout(
-            title="Bin Presentation Rate by Station",
             yaxis_title="Bin Presentation Rate (bins/hour)",
             xaxis=dict(
                 title="Station Code",
@@ -541,7 +549,6 @@ class ResultUI:
         )
 
         fig.update_layout(
-            title="Bin Handling Rate by Skycar",
             yaxis_title="Bin Handling Rate (bins/hour)",
             barmode="stack",
             xaxis=dict(
