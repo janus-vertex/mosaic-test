@@ -162,6 +162,9 @@ class ResultUI:
             self._show_handling_rate_statistics(
                 is_normal_operation_only=is_normal_operation_only
             )
+            progress_bar.progress(91)
+
+            self._show_bin_presentation_rate_over_time()
             progress_bar.progress(100)
 
         # Clean up connections
@@ -591,3 +594,142 @@ class ResultUI:
             use_container_width=True,
             hide_index=False,
         )
+
+    def _show_bin_presentation_rate_over_time(self):
+        streamlit.write("#### Bin Presentation Rate Over Time")
+        
+        # Filter logs for 'Bin stored' actions
+        bin_stored_logs = self.logs[self.logs["action"] == "Bin stored"].copy()
+        
+        if bin_stored_logs.empty:
+            streamlit.warning("No 'Bin stored' logs found in this simulation.")
+            return
+        
+        # Convert timestamp to datetime for easier manipulation
+        bin_stored_logs["datetime"] = pandas.to_datetime(
+            bin_stored_logs["timestamp"], unit="s"
+        )
+        
+        # Create 10-minute intervals
+        bin_stored_logs["interval"] = bin_stored_logs["datetime"].dt.floor("10min")
+        
+        # Group by interval and station_code, then count occurrences
+        interval_station_counts = (
+            bin_stored_logs.groupby(["interval", "station_code"])
+            .size()
+            .reset_index(name="count")
+        )
+        
+        # Convert counts to rates (bins per hour): 10 minutes = 1/6 hour, so multiply by 6
+        interval_station_counts["rate"] = interval_station_counts["count"] * 6
+        
+        # Get all unique intervals and stations for complete data
+        all_intervals = pandas.date_range(
+            start=bin_stored_logs["interval"].min(),
+            end=bin_stored_logs["interval"].max(),
+            freq="10min"
+        )
+        all_stations = sorted([station.code for station in self.stations])
+        
+        # Create a complete DataFrame with all interval-station combinations
+        complete_data = []
+        for interval in all_intervals:
+            for station in all_stations:
+                rate = interval_station_counts[
+                    (interval_station_counts["interval"] == interval) &
+                    (interval_station_counts["station_code"] == station)
+                ]["rate"]
+                rate_value = rate.iloc[0] if not rate.empty else 0
+                complete_data.append({
+                    "interval": interval,
+                    "station_code": station,
+                    "rate": rate_value
+                })
+        
+        complete_df = pandas.DataFrame(complete_data)
+        
+        # Create line plot
+        fig = go.Figure()
+        
+        # Add a line trace for each station
+        for station in all_stations:
+            station_data = complete_df[complete_df["station_code"] == station]
+            fig.add_trace(
+                go.Scatter(
+                    name=f"Station {station}",
+                    x=station_data["interval"],
+                    y=station_data["rate"],
+                    mode="lines+markers",
+                    line=dict(width=2),
+                    marker=dict(size=4),
+                )
+            )
+        
+        # Calculate advance order periods (complement of normal operation ranges)
+        log_start_timestamp = self.logs["timestamp"].min()
+        log_end_timestamp = self.logs["timestamp"].max()
+        
+        advance_order_ranges = []
+        
+        # Sort normal operation ranges by start time
+        sorted_normal_ranges = sorted(self.normal_operation_ranges, key=lambda x: x[0])
+        
+        # Add period before first normal operation (if any)
+        if sorted_normal_ranges and sorted_normal_ranges[0][0] > log_start_timestamp:
+            advance_order_ranges.append((log_start_timestamp, sorted_normal_ranges[0][0]))
+        
+        # Add periods between normal operations
+        for i in range(len(sorted_normal_ranges) - 1):
+            current_end = sorted_normal_ranges[i][1]
+            next_start = sorted_normal_ranges[i + 1][0]
+            if next_start > current_end:
+                advance_order_ranges.append((current_end, next_start))
+        
+        # Add period after last normal operation (if any)
+        if sorted_normal_ranges and sorted_normal_ranges[-1][1] < log_end_timestamp:
+            advance_order_ranges.append((sorted_normal_ranges[-1][1], log_end_timestamp))
+        
+        # Add advance order period highlights
+        y_max = complete_df.groupby("interval")["rate"].sum().max()
+        if y_max > 0:
+            for start_ts, end_ts in advance_order_ranges:
+                start_dt = pandas.to_datetime(start_ts, unit="s")
+                end_dt = pandas.to_datetime(end_ts, unit="s")
+                fig.add_vrect(
+                    x0=start_dt,
+                    x1=end_dt,
+                    fillcolor="red",
+                    opacity=0.2,
+                    layer="below",
+                    line_width=0,
+                )
+        
+        fig.update_layout(
+            title="Bin Presentation Rate Over Time (10-minute intervals)",
+            xaxis_title="Time",
+            yaxis_title="Bin Presentation Rate (bins/hour)",
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02,
+            ),
+            annotations=[
+                dict(
+                    x=1.02,
+                    y=0.5,
+                    xref="paper",
+                    yref="paper",
+                    text="<b>Red areas:</b><br>Advance order<br>operations",
+                    showarrow=False,
+                    font=dict(size=10),
+                    bgcolor="rgba(255,255,255,0.8)",
+                    bordercolor="red",
+                    borderwidth=1,
+                )
+            ],
+            hovermode="x unified",
+        )
+        
+        streamlit.plotly_chart(fig, use_container_width=True)
