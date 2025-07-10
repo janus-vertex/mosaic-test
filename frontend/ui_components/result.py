@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pandas
 import plotly.graph_objects as go
@@ -146,11 +146,18 @@ class ResultUI:
             self.stations = self._parse_stations_from_string(
                 simulation_parameters["stations_string"].iloc[0]
             )
+            self.advance_order_ranges = self._parse_advance_order_ranges_from_string(
+                simulation_parameters["duration_string"].iloc[0],
+                log_start_timestamp,
+            )
 
             progress_bar.progress(75)
 
             streamlit.write("#### Simulation durations")
             self._show_simulation_durations()
+
+            streamlit.write("#### Bin presentation over time")
+            self._show_bin_presentation_over_time()
 
             streamlit.write("#### Bin presentation rate by station")
             is_normal_operation_only = streamlit.toggle(
@@ -174,7 +181,6 @@ class ResultUI:
             )
             progress_bar.progress(91)
 
-            self._show_bin_presentation_rate_over_time()
             progress_bar.progress(100)
 
         # Clean up connections
@@ -184,6 +190,25 @@ class ResultUI:
 
             if mongo_service is not None:
                 mongo_service.close_connection()
+
+    def _parse_advance_order_ranges_from_string(
+        self, duration_string: str, simulation_start_timestamp: float
+    ) -> List[Tuple[float, float]]:
+        advance_order_ranges = []
+        current_time = simulation_start_timestamp
+
+        for segment in duration_string.split(";"):
+            if segment.startswith("AO"):
+                duration_seconds = float(segment[2:])
+                start_timestamp = current_time
+                end_timestamp = current_time + duration_seconds
+                advance_order_ranges.append((start_timestamp, end_timestamp))
+                current_time = end_timestamp
+            elif segment.startswith("N"):
+                duration_seconds = float(segment[1:])
+                current_time += duration_seconds
+
+        return advance_order_ranges
 
     def _get_normal_operation_ranges(self):
         normal_operation_start_timestamps = self.logs[
@@ -602,141 +627,137 @@ class ResultUI:
             hide_index=False,
         )
 
-    def _show_bin_presentation_rate_over_time(self):
-        streamlit.write("#### Bin Presentation Rate Over Time")
-        
-        # Filter logs for 'Bin stored' actions
-        bin_stored_logs = self.logs[self.logs["action"] == "Bin stored"].copy()
-        
-        if bin_stored_logs.empty:
-            streamlit.warning("No 'Bin stored' logs found in this simulation.")
-            return
-        
-        # Convert timestamp to datetime for easier manipulation
-        bin_stored_logs["datetime"] = pandas.to_datetime(
-            bin_stored_logs["timestamp"], unit="s"
+    def _show_bin_presentation_over_time(self):
+        # Toggle to choose bin size (30 minutes or 1 hour)
+        bin_size = streamlit.radio(
+            "Select bin size",
+            ["30 minutes", "1 hour"],
+            index=0,
+            key="bin_size_radio",
+            horizontal=True,
         )
-        
-        # Create 10-minute intervals
-        bin_stored_logs["interval"] = bin_stored_logs["datetime"].dt.floor("10min")
-        
+        bin_size_minutes = 60 if bin_size == "1 hour" else 30
+
+        bin_stored_logs = self.logs[self.logs["action"] == "Bin stored"].copy()
+
+        if bin_stored_logs.empty:
+            streamlit.warning("No stored bins in this simulation yet.")
+            return
+
+        log_start_timestamp = self.logs["timestamp"].min()
+        bin_stored_logs["duration_minutes"] = (
+            bin_stored_logs["timestamp"] - log_start_timestamp
+        ) / 60
+        bin_stored_logs["interval_minutes"] = (
+            (bin_stored_logs["duration_minutes"] // bin_size_minutes) * bin_size_minutes
+        ).astype(int)
+
         # Group by interval and station_code, then count occurrences
         interval_station_counts = (
-            bin_stored_logs.groupby(["interval", "station_code"])
+            bin_stored_logs.groupby(["interval_minutes", "station_code"])
             .size()
             .reset_index(name="count")
         )
-        
-        # Convert counts to rates (bins per hour): 10 minutes = 1/6 hour, so multiply by 6
-        interval_station_counts["rate"] = interval_station_counts["count"] * 6
-        
+
         # Get all unique intervals and stations for complete data
-        all_intervals = pandas.date_range(
-            start=bin_stored_logs["interval"].min(),
-            end=bin_stored_logs["interval"].max(),
-            freq="10min"
+        max_interval = bin_stored_logs["interval_minutes"].max()
+        all_intervals = list(
+            range(
+                0,
+                int(max_interval) + bin_size_minutes,
+                bin_size_minutes,
+            )
         )
         all_stations = sorted([station.code for station in self.stations])
-        
-        # Create a complete DataFrame with all interval-station combinations
+
         complete_data = []
         for interval in all_intervals:
             for station in all_stations:
-                rate = interval_station_counts[
-                    (interval_station_counts["interval"] == interval) &
-                    (interval_station_counts["station_code"] == station)
-                ]["rate"]
-                rate_value = rate.iloc[0] if not rate.empty else 0
-                complete_data.append({
-                    "interval": interval,
-                    "station_code": station,
-                    "rate": rate_value
-                })
-        
+                matching_rows = interval_station_counts[
+                    (interval_station_counts["interval_minutes"] == interval)
+                    & (interval_station_counts["station_code"] == station)
+                ]
+                count_value = (
+                    matching_rows["count"].iloc[0] if not matching_rows.empty else 0
+                )
+                complete_data.append(
+                    {
+                        "interval_minutes": interval,
+                        "station_code": station,
+                        "count": count_value,
+                    }
+                )
+
         complete_df = pandas.DataFrame(complete_data)
-        
-        # Create line plot
+
+        # Create stacked bar chart
         fig = go.Figure()
-        
-        # Add a line trace for each station
+
+        # Convert all intervals to hours for consistent x-axis
+        all_intervals_hours = [interval / 60 for interval in all_intervals]
+
+        # Add a bar trace for each station
         for station in all_stations:
             station_data = complete_df[complete_df["station_code"] == station]
+            # Sort by interval to ensure proper order
+            station_data = station_data.sort_values("interval_minutes")
+
+            # Convert minutes to hours for x-axis display
+            x_values = (station_data["interval_minutes"] + bin_size_minutes / 2) / 60
+            y_values = station_data["count"]
+
+            # Only show text labels for non-zero values to avoid clutter
+            text_values = [str(count) if count > 0 else "" for count in y_values]
+
             fig.add_trace(
-                go.Scatter(
+                go.Bar(
                     name=f"Station {station}",
-                    x=station_data["interval"],
-                    y=station_data["rate"],
-                    mode="lines+markers",
-                    line=dict(width=2),
-                    marker=dict(size=4),
+                    x=x_values,
+                    y=y_values,
+                    text=text_values,
+                    textposition="auto",
+                    width=bin_size_minutes / 60 * 0.9,
                 )
             )
-        
-        # Calculate advance order periods (complement of normal operation ranges)
-        log_start_timestamp = self.logs["timestamp"].min()
-        log_end_timestamp = self.logs["timestamp"].max()
-        
-        advance_order_ranges = []
-        
-        # Sort normal operation ranges by start time
-        sorted_normal_ranges = sorted(self.normal_operation_ranges, key=lambda x: x[0])
-        
-        # Add period before first normal operation (if any)
-        if sorted_normal_ranges and sorted_normal_ranges[0][0] > log_start_timestamp:
-            advance_order_ranges.append((log_start_timestamp, sorted_normal_ranges[0][0]))
-        
-        # Add periods between normal operations
-        for i in range(len(sorted_normal_ranges) - 1):
-            current_end = sorted_normal_ranges[i][1]
-            next_start = sorted_normal_ranges[i + 1][0]
-            if next_start > current_end:
-                advance_order_ranges.append((current_end, next_start))
-        
-        # Add period after last normal operation (if any)
-        if sorted_normal_ranges and sorted_normal_ranges[-1][1] < log_end_timestamp:
-            advance_order_ranges.append((sorted_normal_ranges[-1][1], log_end_timestamp))
-        
+
         # Add advance order period highlights
-        y_max = complete_df.groupby("interval")["rate"].sum().max()
+        log_start_timestamp = self.logs["timestamp"].min()
+        y_max = complete_df.groupby("interval_minutes")["count"].sum().max()
         if y_max > 0:
-            for start_ts, end_ts in advance_order_ranges:
-                start_dt = pandas.to_datetime(start_ts, unit="s")
-                end_dt = pandas.to_datetime(end_ts, unit="s")
+            for start_ts, end_ts in self.advance_order_ranges:
+                # Convert timestamps to duration from start in hours
+                start_hours = (start_ts - log_start_timestamp) / 3600
+                end_hours = (end_ts - log_start_timestamp) / 3600
                 fig.add_vrect(
-                    x0=start_dt,
-                    x1=end_dt,
+                    x0=start_hours,
+                    x1=end_hours,
                     fillcolor="red",
                     opacity=0.2,
                     layer="below",
                     line_width=0,
                 )
-        
+
         fig.update_layout(
-            title="Bin Presentation Rate Over Time (10-minute intervals)",
-            xaxis_title="Time",
-            yaxis_title="Bin Presentation Rate (bins/hour)",
-            legend=dict(
-                orientation="v",
-                yanchor="top",
-                y=1,
-                xanchor="left",
-                x=1.02,
+            xaxis_title="Duration from start (hours)",
+            yaxis_title="Bin Count",
+            barmode="stack",
+            xaxis=dict(
+                tickmode="linear",
+                tick0=all_intervals_hours[0],
+                dtick=bin_size_minutes / 60,
+                range=[
+                    all_intervals_hours[0] - bin_size_minutes * 0.2 / 60,
+                    all_intervals_hours[-1] + bin_size_minutes * 1.2 / 60,
+                ],
             ),
-            annotations=[
-                dict(
-                    x=1.02,
-                    y=0.5,
-                    xref="paper",
-                    yref="paper",
-                    text="<b>Red areas:</b><br>Advance order<br>operations",
-                    showarrow=False,
-                    font=dict(size=10),
-                    bgcolor="rgba(255,255,255,0.8)",
-                    bordercolor="red",
-                    borderwidth=1,
-                )
-            ],
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+            ),
             hovermode="x unified",
         )
-        
+
         streamlit.plotly_chart(fig, use_container_width=True)
