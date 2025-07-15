@@ -211,22 +211,73 @@ class ResultUI:
         return advance_order_ranges
 
     def _get_normal_operation_ranges(self):
-        normal_operation_start_timestamps = self.logs[
-            (self.logs["action"] == "Normal operation starts")
-        ]["timestamp"].tolist()[::-1]
 
-        normal_operation_end_timestamps = self.logs[
+        actual_advance_order_start_timestamps = self.logs[
             (self.logs["action"] == "Advance order starts")
-            | (self.logs["action"] == "Simulation ends")
         ]["timestamp"].tolist()[::-1]
 
-        normal_operation_ranges = []
-        for start in normal_operation_start_timestamps:
-            end = next(
-                (i for i in normal_operation_end_timestamps if i > start),
-                self.logs["timestamp"].min(),
+        # Extract both timestamps and the seconds from "Advance order ends in X seconds"
+        advance_order_ends_data = self.logs[
+            self.logs["action"].str.startswith("Advance order ends in ")
+        ]
+
+        # Extract the integer seconds from the action text
+        advance_order_remaining_seconds = (
+            advance_order_ends_data["action"]
+            .str.extract(r"Advance order ends in (\d+) seconds")[0]
+            .astype(int)
+            .tolist()[::-1]
+        )
+
+        actual_advance_order_end_timestamps = advance_order_ends_data[
+            "timestamp"
+        ].tolist()[::-1]
+
+        # Get the timestamps
+        actual_advance_order_end_timestamps = [
+            actual_advance_order_end_timestamps[i] + advance_order_remaining_seconds[i]
+            for i in range(len(actual_advance_order_end_timestamps))
+        ]
+
+        # Create normal operation ranges as the complement of advance order ranges
+        # First, sort the advance order timestamps to ensure they're in chronological order
+        actual_advance_order_ranges = list(
+            zip(
+                actual_advance_order_start_timestamps,
+                actual_advance_order_end_timestamps,
             )
-            normal_operation_ranges.append((start, end))
+        )
+        actual_advance_order_ranges.sort()  # Sort by start time
+
+        # Get the simulation start and end timestamps
+        simulation_start = self.logs["timestamp"].min()
+        simulation_end = self.logs["timestamp"].max()
+
+        # Initialize normal operation ranges
+        normal_operation_ranges = []
+
+        # If there are no advance orders, the entire simulation is normal operation
+        if not actual_advance_order_ranges:
+            normal_operation_ranges = [(simulation_start, simulation_end)]
+        else:
+            # Add normal operation range from simulation start to first advance order
+            if actual_advance_order_ranges[0][0] > simulation_start:
+                normal_operation_ranges.append(
+                    (simulation_start, actual_advance_order_ranges[0][0])
+                )
+
+            # Add normal operation ranges between advance orders
+            for i in range(len(actual_advance_order_ranges) - 1):
+                current_end = actual_advance_order_ranges[i][1]
+                next_start = actual_advance_order_ranges[i + 1][0]
+                if next_start > current_end:
+                    normal_operation_ranges.append((current_end, next_start))
+
+            # Add normal operation range from last advance order to simulation end
+            if actual_advance_order_ranges[-1][1] < simulation_end:
+                normal_operation_ranges.append(
+                    (actual_advance_order_ranges[-1][1], simulation_end)
+                )
 
         self.normal_operation_ranges = normal_operation_ranges
         self.normal_operation_duration_in_hours = sum(
