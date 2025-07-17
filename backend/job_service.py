@@ -180,9 +180,9 @@ class JobService:
                 )
 
                 # Submit advance orders to SM
-                self._submit_advance_orders(
-                    orders=new_inbound_advance_orders | new_outbound_advance_orders
-                )
+                new_orders = new_inbound_advance_orders | new_outbound_advance_orders
+                if len(new_orders) > 0:
+                    self._submit_advance_orders(orders=new_orders)
 
                 # Update the advance orders
                 inbound_advance_orders |= new_inbound_advance_orders
@@ -194,7 +194,6 @@ class JobService:
                         current_operation_index
                     )
                 )
-                # current_operation_index += 1
 
                 self._log(
                     f"Advance order ends in {int(next_check_time - time.time())} seconds"
@@ -448,11 +447,11 @@ class JobService:
         Raises
         ------
         SimulationBackendException
-            - If the number of bins is less than 1
             - If there is no bin after querying the layers
         """
         if number_of_bins < 1:
-            raise SimulationBackendException(f"{number_of_bins=}; must be at least 1")
+            self._log(f"No bins created for order.")
+            return []
 
         # Use pareto probabilities as weights to randomly sample layer indices
         weights = numpy.array(self.body.parameters.pareto_probabilities)

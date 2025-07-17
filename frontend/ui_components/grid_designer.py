@@ -23,6 +23,8 @@ class GridDesignerUI:
         self.grid_data = None
         self.stations = None
         self.number_of_bins = None
+        self.has_inbound = True
+        self.has_outbound = True
 
     def show(self) -> bool:
         """
@@ -305,14 +307,6 @@ class GridDesignerUI:
             station_groups[station_num]["stations"].append(station)
             station_groups[station_num]["types"].add(dp_type if dp_type else "mixed")
 
-        # Check for inbound/outbound presence
-        if not (has_inbound and has_outbound):
-            streamlit.error(
-                "There must be at least one inbound and one outbound station.",
-                icon="❌",
-            )
-            return False
-
         # Validate station type combinations
         for station_num, group in station_groups.items():
             types = group["types"]
@@ -323,9 +317,9 @@ class GridDesignerUI:
                     icon="❌",
                 )
                 return False
-            
+
             # XOR check
-            if bool("D" in types) != bool("P" in types):  
+            if bool("D" in types) != bool("P" in types):
                 streamlit.error(
                     "Each pick port must have a matching drop port with the same "
                     + "station number.",
@@ -334,6 +328,8 @@ class GridDesignerUI:
                 return False
 
         self.stations: List[str] = stations
+        self.has_inbound = has_inbound
+        self.has_outbound = has_outbound
         return True
 
     def _display_grid(self):
