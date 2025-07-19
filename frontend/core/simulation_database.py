@@ -56,6 +56,7 @@ class Parameter(Base):
     stations_string = Column(String, nullable=True)
     timestamp = Column(Float, nullable=True)
     duration_string = Column(String, nullable=True)
+    station_groups_string = Column(String, nullable=True)
 
 
 class SimulationDatabase:

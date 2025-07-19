@@ -25,7 +25,13 @@ class Parameters(BaseModel):
     pareto_probabilities: List[float]
 
 
+class StationGroup(BaseModel):
+    group: int
+    station_codes: List[int]
+
+
 class JobsCreationRequest(BaseModel):
     parameters: Parameters
     configuration: Configuration
     stations: List[Station]
+    station_groups: List[StationGroup]

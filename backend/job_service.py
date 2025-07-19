@@ -47,6 +47,13 @@ class Station:
         self.advance_order_name = advance_order_name
 
 
+class StationGroup:
+    def __init__(self, group: int, stations: List[Station]):
+        self.group = group
+        self.stations = stations
+        self.type = stations[0].type
+
+
 class JobService:
     """
     JobService class.
@@ -95,6 +102,19 @@ class JobService:
             for station in self.body.stations
         ]
 
+        # Create a list of station groups
+        station_groups = [
+            StationGroup(
+                group=group.group,
+                stations=[
+                    station
+                    for station in station_list
+                    if station.code in group.station_codes
+                ],
+            )
+            for group in self.body.station_groups
+        ]
+
         # Create a list of operation types and their corresponding durations
         self.operations = [
             (
@@ -126,12 +146,6 @@ class JobService:
             and time.time() <= simulation_start_time + total_simulation_duration
         ):
             loop_start_time = time.time()
-
-            # # Break the loop if the simulation duration is reached. In theory this is not
-            # # needed as the condition in while loop should take care of breaking when
-            # # simulation is ended, but just in case
-            # if current_operation_index >= len(operations):
-            #     break
 
             current_operation, current_operation_index = self._get_current_operation()
             current_operation_type, current_operation_duration = current_operation
@@ -208,92 +222,137 @@ class JobService:
                     is_normal_operation_ending = False
                     self._log("Normal operation starts")
 
-                for station in station_list:
+                # for station in station_list:
+                for station_group in station_groups:
                     advance_orders = (
                         inbound_advance_orders
-                        if station.type == "I"
+                        if station_group.type == "I"
                         else outbound_advance_orders
                     )
 
-                    if len(station.bins) == 0 and current_operation_type == "N":
+                    is_all_stations_in_group_empty = all(
+                        len(station.bins) == 0 for station in station_group.stations
+                    )
+
+                    if is_all_stations_in_group_empty and current_operation_type == "N":
+                        number_of_stations_in_group = len(station_group.stations)
+
+                        # If there are advance orders for the group, assign the bins to
+                        # the stations on an equal basis
                         if len(advance_orders) > 0:
+
                             # Get the first advance order from the dictionary
                             order_name = next(iter(advance_orders))
-                            station.bins = advance_orders[order_name]
-                            advance_orders.pop(order_name)
+                            order_to_share = advance_orders[order_name]
+                            number_of_bins_per_station = math.ceil(
+                                len(order_to_share) / number_of_stations_in_group
+                            )
 
-                            station.advance_order_name = order_name
+                            for station in station_group.stations:
+                                station.bins = order_to_share[
+                                    :number_of_bins_per_station
+                                ]
+                                order_to_share = order_to_share[
+                                    number_of_bins_per_station:
+                                ]
+                                station.advance_order_name = order_name
+
+                            advance_orders.pop(order_name)
 
                         # If there are no more bins for the station, find new bins and call
                         # them from the matrix
                         else:
                             number_of_bins = self._get_number_of_bins_per_order(
-                                station_type=station.type
+                                station_type=station_group.type
                             )
-                            station.bins = self._get_bins_from_order(
-                                number_of_bins=number_of_bins, station_code=station.code
+
+                            number_of_bins_per_station = math.ceil(
+                                number_of_bins / number_of_stations_in_group
                             )
-                            station.advance_order_name = None
+
+                            remaining_bins = number_of_bins
+                            for station in station_group.stations:
+                                station.bins = self._get_bins_from_order(
+                                    number_of_bins=min(
+                                        remaining_bins, number_of_bins_per_station
+                                    ),
+                                    station_code=station.code,
+                                )
+                                station.advance_order_name = None
+
+                                remaining_bins = max(
+                                    0, remaining_bins - number_of_bins_per_station
+                                )
 
                         # Call bins from matrix to the station
-                        bin_ids = [bin["code"] for bin in station.bins]
-                        _ = self._call_bins(
-                            station_code=station.code,
-                            bin_ids=bin_ids,
-                            advance_order_name=station.advance_order_name,
-                        )
+                        for station in station_group.stations:
+                            bin_ids = [bin["code"] for bin in station.bins]
+                            _ = self._call_bins(
+                                station_code=station.code,
+                                bin_ids=bin_ids,
+                                advance_order_name=station.advance_order_name,
+                            )
 
-                    if len(station.bins) == 0:
+                    # During advance order operation but with remaining normal operation
+                    # orders, we don't need to check station status. We just skip until
+                    # all orders from all stations are completed.
+                    if all(
+                        len(station.bins) == 0 for station in station_group.stations
+                    ):
                         continue
 
                     # Check station status at intervals to see if a bin is at station
-                    station_status = self._check_station_status(station.code)
-                    status_with_bin_at_station = next(
-                        (
-                            data_item
-                            for data_item in station_status
-                            if data_item["lastMovement"] == "AT_STATION_WORK"
-                        ),
-                        None,
-                    )
-
-                    # If a bin is at station and the time to store the bin has come
-                    if (
-                        status_with_bin_at_station is not None
-                        and time.time() >= station.next_job_time
-                    ):
-                        # Store the bin at station back to matrix
-                        bin_id = status_with_bin_at_station["code"]
-                        _ = self._store_bin(
-                            station_code=station.code,
-                            bin_id=bin_id,
-                            advance_order_name=station.advance_order_name,
-                        )
-                        self._log(
-                            f"Bin stored", station_code=station.code, bin_code=bin_id
+                    for station in station_group.stations:
+                        station_status = self._check_station_status(station.code)
+                        status_with_bin_at_station = next(
+                            (
+                                data_item
+                                for data_item in station_status
+                                if data_item["lastMovement"] == "AT_STATION_WORK"
+                            ),
+                            None,
                         )
 
-                        # Add delay to the next job time
-                        delay = (
-                            self.body.parameters.inbound_time
-                            if station.type == "I"
-                            else self.body.parameters.outbound_time
-                        )
-                        station.next_job_time = time.time() + delay
-
-                        # Remove the stored bin from the list of bins assigned to the
-                        # station
-                        bin_to_remove = next(
-                            (bin for bin in station.bins if bin["code"] == bin_id), None
-                        )
-
-                        # Sanity check: this should never happen
-                        if bin_to_remove is None:
-                            raise SimulationBackendException(
-                                f"Bin {bin_id} not found at station {station.code}"
+                        # If a bin is at station and the time to store the bin has come
+                        if (
+                            status_with_bin_at_station is not None
+                            and time.time() >= station.next_job_time
+                        ):
+                            # Store the bin at station back to matrix
+                            bin_id = status_with_bin_at_station["code"]
+                            _ = self._store_bin(
+                                station_code=station.code,
+                                bin_id=bin_id,
+                                advance_order_name=station.advance_order_name,
+                            )
+                            self._log(
+                                f"Bin stored",
+                                station_code=station.code,
+                                bin_code=bin_id,
                             )
 
-                        station.bins.remove(bin_to_remove)
+                            # Add delay to the next job time
+                            delay = (
+                                self.body.parameters.inbound_time
+                                if station.type == "I"
+                                else self.body.parameters.outbound_time
+                            )
+                            station.next_job_time = time.time() + delay
+
+                            # Remove the stored bin from the list of bins assigned to the
+                            # station
+                            bin_to_remove = next(
+                                (bin for bin in station.bins if bin["code"] == bin_id),
+                                None,
+                            )
+
+                            # Sanity check: this should never happen
+                            if bin_to_remove is None:
+                                raise SimulationBackendException(
+                                    f"Bin {bin_id} not found at station {station.code}"
+                                )
+
+                            station.bins.remove(bin_to_remove)
 
                 next_check_time = loop_start_time + check_time_interval
                 normal_operation_loop_index += (
@@ -315,7 +374,8 @@ class JobService:
                 ):
                     normal_operation_loop_index = 0
                     self._log(
-                        "Normal operation ends. Completing remaining bins in existing orders."
+                        "Normal operation ends. Completing remaining bins in existing "
+                        + "orders."
                     )
                     is_normal_operation_ending = True
 
