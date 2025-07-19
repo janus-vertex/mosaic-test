@@ -1,6 +1,4 @@
 import json
-from re import X
-from typing import List
 
 from ui_components.simulation_input import SimulationInputUI
 from ui_components.grid_designer import GridDesignerUI
@@ -33,6 +31,19 @@ class InputDatabase:
             input_simulation=input_simulation,
         )
         self.duration_string = simulation_input_ui.duration_string
+        self.station_groups_string = self._encode_station_groups(
+            input_simulation=input_simulation
+        )
+
+    def _encode_station_groups(self, input_simulation: InputSimulation) -> str:
+        return_str = ""
+        for group in input_simulation.station_groups:
+            return_str += (
+                f"{group.group}:"
+                + ",".join(str(code) for code in group.station_codes)
+                + ";"
+            )
+        return return_str
 
     def _encode_stations(
         self,

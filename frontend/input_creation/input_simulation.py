@@ -19,6 +19,7 @@ class InputSimulation:
             server_number=server_number,
         )
         self._create_stations(grid_designer_ui=grid_designer_ui)
+        self._create_station_groups(grid_designer_ui=grid_designer_ui)
 
     def _create_parameters(self, simulation_input_ui: SimulationInputUI):
         self.parameters = InputParameters(
@@ -85,6 +86,12 @@ class InputSimulation:
         elif type == "dict":
             return json.loads(json_str)
 
+    def _create_station_groups(self, grid_designer_ui: GridDesignerUI):
+        self.station_groups = [
+            InputStationGroup(group=index, station_codes=sorted(group))
+            for index, group in enumerate(grid_designer_ui.station_code_groups)
+        ]
+
 
 class InputParameters:
     def __init__(
@@ -125,3 +132,9 @@ class InputStation:
     def __init__(self, code: int, type_: str):
         self.code = code
         self.type = type_
+
+
+class InputStationGroup:
+    def __init__(self, group: int, station_codes: List[int]):
+        self.group = group
+        self.station_codes = station_codes

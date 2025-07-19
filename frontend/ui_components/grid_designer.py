@@ -25,6 +25,7 @@ class GridDesignerUI:
         self.number_of_bins = None
         self.has_inbound = True
         self.has_outbound = True
+        self.station_code_groups = None
 
     def show(self) -> bool:
         """
@@ -73,6 +74,10 @@ class GridDesignerUI:
                 return False
 
             self._display_grid()
+
+            is_success = self._choose_linked_stations()
+            if not is_success:
+                return False
 
         col1, col2, col3 = streamlit.columns(3)
         gross_number_of_spaces_expected = math.floor(
@@ -433,3 +438,101 @@ class GridDesignerUI:
         fig.update_traces(hovertemplate="X: %{x}<br>Y: %{y}<extra></extra>")
 
         streamlit.plotly_chart(fig)
+
+    def _choose_linked_stations(self):
+        # Get the index of the stations from self.stations.
+        station_indices = list(
+            set(
+                [
+                    int(re.match(r"^P(\d+)([DP])?([IO])$", station).group(1))
+                    for station in self.stations
+                ]
+            )
+        )
+
+        streamlit.write("#### Linked stations")
+        streamlit.write(
+            "Link two stations so they share an inbound/outbound order. Leave empty to skip."
+        )
+
+        linked_stations_df = pandas.DataFrame(
+            columns=["primary_station_index", "linked_station_index"]
+        )
+        linked_stations_df = streamlit.data_editor(
+            linked_stations_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "primary_station_index": streamlit.column_config.SelectboxColumn(
+                    "Primary station index",
+                    options=station_indices,
+                    width="medium",
+                    required=True,
+                ),
+                "linked_station_index": streamlit.column_config.SelectboxColumn(
+                    "Linked station index",
+                    options=station_indices,
+                    width="medium",
+                    required=True,
+                ),
+            },
+        )
+
+        # Validate input
+        primary_station_indices = linked_stations_df["primary_station_index"].tolist()
+        linked_station_indices = linked_stations_df["linked_station_index"].tolist()
+
+        if len(primary_station_indices) != len(set(primary_station_indices)):
+            streamlit.error("Duplicated primary station index detected.", icon="❌")
+            return False
+
+        if len(linked_station_indices) != len(set(linked_station_indices)):
+            streamlit.error("Duplicated linked station index detected.", icon="❌")
+            return False
+
+        for i in primary_station_indices:
+            if i in linked_station_indices:
+                streamlit.error(
+                    "Primary station index found in linked station index.", icon="❌"
+                )
+                return False
+
+        # Create a mapping of station indices to their types for faster lookup
+        station_types = {}
+        pattern = re.compile(r"^P(\d+)([DP])?([IO])$")
+        
+        for station in self.stations:
+            match = pattern.match(station)
+            station_index = int(match.group(1))
+            station_type = match.group(3)  
+            station_types[station_index] = station_type
+    
+        # Check if linked stations have the same type
+        for _, rows in linked_stations_df.iterrows():
+            i = rows["primary_station_index"]
+            j = rows["linked_station_index"]
+            
+            if station_types.get(i) != station_types.get(j):
+                streamlit.error(
+                    f"Primary station {i} and linked station {j} have different "
+                    "inbound/outbound types.",
+                    icon="❌",
+                )
+                return False
+
+        # Remaining station indices
+        remaining_station_indices = [
+            i
+            for i in station_indices
+            if i not in primary_station_indices and i not in linked_station_indices
+        ]
+
+        # Create station groups. Unlinked stations are grouped as a single station.
+        station_code_groups = [
+            [rows["primary_station_index"], rows["linked_station_index"]]
+            for _, rows in linked_stations_df.iterrows()
+        ] + [[i] for i in remaining_station_indices]
+
+        self.station_code_groups = station_code_groups
+
+        return True

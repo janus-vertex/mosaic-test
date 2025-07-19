@@ -15,7 +15,7 @@ def main():
     streamlit.set_page_config(page_title="MOSAIC", page_icon=":robot_face:")
 
     streamlit.title("Mosaic App")
-    streamlit.write("Version 0.8.1")
+    streamlit.write("Version 0.8.2")
 
     status_check_ui = StatusCheckUI()
     status_check_ui.show()
