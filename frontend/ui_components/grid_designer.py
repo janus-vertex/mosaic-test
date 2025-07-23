@@ -26,6 +26,7 @@ class GridDesignerUI:
         self.has_inbound = True
         self.has_outbound = True
         self.station_code_groups = None
+        self.desired_skycar_directions = None
 
     def show(self) -> bool:
         """
@@ -376,6 +377,9 @@ class GridDesignerUI:
             columns=grid_data_display.columns,
         )
 
+        # Add lines to indicate desired skycar directions
+        self._get_desired_skycar_directions()
+
         # Create a figure for the grid layout
         fig = go.Figure(
             data=go.Heatmap(
@@ -419,6 +423,38 @@ class GridDesignerUI:
                 line=dict(color="gray", width=1),
             )
 
+        # Add arrows to indicate the desired skycar directions
+        if self.desired_skycar_directions is not None:
+            # Group by arrow_index to process each arrow separately
+            for _, arrow_points in self.desired_skycar_directions.groupby(
+                "arrow_index"
+            ):
+                # Process each segment of the arrow
+                for i in range(len(arrow_points) - 1):
+                    from_point = arrow_points.iloc[i]
+                    to_point = arrow_points.iloc[i + 1]
+
+                    # Determine if this is the last segment (needs arrowhead)
+                    is_last_segment = i == len(arrow_points) - 2
+
+                    # Add line segment with arrowhead only for the last segment
+                    fig.add_annotation(
+                        x=to_point["X"],
+                        y=to_point["Y"],
+                        ax=from_point["X"],
+                        ay=from_point["Y"],
+                        xref="x",
+                        yref="y",
+                        axref="x",
+                        ayref="y",
+                        showarrow=True,
+                        arrowhead=(2 if is_last_segment else 0),
+                        arrowsize=1,
+                        arrowwidth=1,
+                        arrowcolor="black",
+                        arrowside="end",
+                    )
+
         fig.update_layout(
             title="Grid Layout",
             xaxis=dict(
@@ -438,6 +474,84 @@ class GridDesignerUI:
         fig.update_traces(hovertemplate="X: %{x}<br>Y: %{y}<extra></extra>")
 
         streamlit.plotly_chart(fig)
+
+    def _get_desired_skycar_directions(self):
+        """
+        Get the desired skycar directions.
+        """
+        desired_skycar_directions = pandas.DataFrame(columns=["arrow_index", "X", "Y"])
+
+        with streamlit.form("desired_skycar_directions"):
+            streamlit.write("#### Desired skycar directions")
+            streamlit.write(
+                "Add desired skycar directions by adding a start point, any turning "
+                + "points, and lastly an end point for each arrow individually. Leave "
+                + "empty to skip."
+            )
+            desired_skycar_directions = streamlit.data_editor(
+                desired_skycar_directions,
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "arrow_index": streamlit.column_config.SelectboxColumn(
+                        "Arrow index",
+                        options=list(range(1, 20)),
+                        width="small",
+                        required=True,
+                    ),
+                    "X": streamlit.column_config.SelectboxColumn(
+                        "X",
+                        options=list(self.grid_data.columns),
+                        width="small",
+                        required=True,
+                    ),
+                    "Y": streamlit.column_config.SelectboxColumn(
+                        "Y",
+                        options=list(self.grid_data.index),
+                        width="small",
+                        required=True,
+                    ),
+                },
+            )
+
+            submitted_button = streamlit.form_submit_button("Add desired directions")
+            if submitted_button:
+                desired_skycar_directions = desired_skycar_directions.dropna(how="all")
+
+        # Validate if the directions are horizontal or vertical only
+        for arrow_index, group in desired_skycar_directions.groupby("arrow_index"):
+            # Sort by index to ensure points are in order of entry
+            group = group.sort_index()
+
+            # Check if there are at least 2 points in each arrow
+            if len(group) < 2:
+                streamlit.error(
+                    f"Arrow {arrow_index} has less than 2 points. No preferred "
+                    + "direction will be added.",
+                    icon="❌",
+                )
+                return None
+
+            # Check each adjacent pair of points
+            for i in range(len(group) - 1):
+                current_point = group.iloc[i]
+                next_point = group.iloc[i + 1]
+
+                current_x, current_y = current_point["X"], current_point["Y"]
+                next_x, next_y = next_point["X"], next_point["Y"]
+
+                if (current_x != next_x and current_y != next_y) or (
+                    current_x == next_x and current_y == next_y
+                ):
+                    streamlit.error(
+                        f"Direction from ({current_x}, {current_y}) to "
+                        + f"({next_x}, {next_y}) in arrow {arrow_index} is not horizontal "
+                        + "or vertical. No preferred direction will be added.",
+                        icon="❌",
+                    )
+                    return None
+
+        self.desired_skycar_directions = desired_skycar_directions
 
     def _choose_linked_stations(self):
         # Get the index of the stations from self.stations.
@@ -500,18 +614,18 @@ class GridDesignerUI:
         # Create a mapping of station indices to their types for faster lookup
         station_types = {}
         pattern = re.compile(r"^P(\d+)([DP])?([IO])$")
-        
+
         for station in self.stations:
             match = pattern.match(station)
             station_index = int(match.group(1))
-            station_type = match.group(3)  
+            station_type = match.group(3)
             station_types[station_index] = station_type
-    
+
         # Check if linked stations have the same type
         for _, rows in linked_stations_df.iterrows():
             i = rows["primary_station_index"]
             j = rows["linked_station_index"]
-            
+
             if station_types.get(i) != station_types.get(j):
                 streamlit.error(
                     f"Primary station {i} and linked station {j} have different "
