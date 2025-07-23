@@ -48,6 +48,7 @@ class Simulator:
             ("Configure Layout", self._configure_layout),
             ("Configure TC Obstacles", self._configure_TC_obstacles),
             ("Configure Skycar Setup", self._configure_skycar_setup),
+            ("Configure Skycar Constraints", self._configure_skycar_constraints),
             ("Start Cube", self._start_cube),
             ("Set Time Delay", self._set_delay),
             ("Start Simulation", self._start_simulation),
@@ -135,6 +136,16 @@ class Simulator:
         )
         return response
 
+    def _configure_skycar_constraints(self) -> requests.Response:
+        response = MosaicRequest.send_request(
+            url=f"{self.TC_BASE}/operation/cube/constraints",
+            data=self.simulation_preparation_ui.input_skycar_constraints.to_json(
+                type="dict"
+            ),
+            method="PATCH",
+        )
+        return response
+
     def _start_cube(self) -> requests.Response:
         response = MosaicRequest.send_request(
             url=f"{self.TC_BASE}/operation/cube?start=true&bypass=true",
@@ -148,7 +159,7 @@ class Simulator:
             data=self.simulation_preparation_ui.input_delay.to_json(type="dict"),
         )
         return response
-    
+
     def _configure_optimisation(self) -> requests.Response:
         response = MosaicRequest.send_request(
             url=f"{self.SM_BASE}/v3/settings/storage-optimizer",

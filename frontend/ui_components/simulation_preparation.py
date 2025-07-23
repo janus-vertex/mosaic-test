@@ -8,6 +8,7 @@ from input_creation.input_simulation import InputSimulation
 from input_creation.input_skycar import InputSkyCarSetup
 from input_creation.input_sm_obstacles import InputSMObstacles
 from input_creation.input_tc_obstacles import InputTCObstacles
+from input_creation.input_skycar_constraints import InputSkyCarConstraints
 from input_creation.input_zones import InputZonesAndStations
 from ui_components.grid_designer import GridDesignerUI
 from ui_components.simulation_input import SimulationInputUI
@@ -43,6 +44,9 @@ class SimulationPreparationUI:
             model=Parameters.ZONE_NAME,
         )
         input_tc_obstacles = InputTCObstacles(grid_designer_ui=self.grid_designer_ui)
+        input_skycar_constraints = InputSkyCarConstraints(
+            grid_designer_ui=self.grid_designer_ui
+        )
         input_delay = InputDelay(
             simulation_input_ui=self.simulation_input_ui,
             input_zones_and_stations=input_zones_and_stations,
@@ -93,6 +97,12 @@ class SimulationPreparationUI:
                     json_data=json_data, file_name="reset-6.json"
                 )
 
+            with streamlit.expander("reset-7.json: Skycar Constraints"):
+                json_data = input_skycar_constraints.to_json()
+                self._show_individual_json_file(
+                    json_data=json_data, file_name="reset-7.json"
+                )
+
             with streamlit.expander("reset-delay.json: Delay"):
                 json_data = input_delay.to_json()
                 self._show_individual_json_file(
@@ -122,6 +132,7 @@ class SimulationPreparationUI:
         self.input_buffer = input_buffer
         self.input_skycar_setup = input_skycar_setup
         self.input_tc_obstacles = input_tc_obstacles
+        self.input_skycar_constraints = input_skycar_constraints
         self.input_delay = input_delay
         self.input_optimisation = input_optimisation
         self.input_simulation = input_simulation
