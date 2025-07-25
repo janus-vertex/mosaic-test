@@ -34,6 +34,15 @@ class InputDatabase:
         self.station_groups_string = self._encode_station_groups(
             input_simulation=input_simulation
         )
+        self.desired_skycar_directions_string = self._encode_desired_skycar_directions(
+            grid_designer_ui=grid_designer_ui
+        )
+
+    def _encode_desired_skycar_directions(self, grid_designer_ui: GridDesignerUI) -> str:
+        return_str = ""
+        for _, row in grid_designer_ui.desired_skycar_directions.iterrows():
+            return_str += f"{row['arrow_index']}:{row['X']},{row['Y']};"
+        return return_str[:-1]
 
     def _encode_station_groups(self, input_simulation: InputSimulation) -> str:
         return_str = ""
@@ -43,7 +52,7 @@ class InputDatabase:
                 + ",".join(str(code) for code in group.station_codes)
                 + ";"
             )
-        return return_str
+        return return_str[:-1]
 
     def _encode_stations(
         self,

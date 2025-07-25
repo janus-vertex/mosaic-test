@@ -57,6 +57,7 @@ class Parameter(Base):
     timestamp = Column(Float, nullable=True)
     duration_string = Column(String, nullable=True)
     station_groups_string = Column(String, nullable=True)
+    desired_skycar_directions_string = Column(String, nullable=True)
 
 
 class SimulationDatabase:

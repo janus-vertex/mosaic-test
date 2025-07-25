@@ -24,10 +24,10 @@ class InputSkyCarConstraints:
             current_arrow_constraints = []
             current_constraints_to_remove = []
             for i in range(len(arrow_points) - 1):
-                turning_point_i = (arrow_points.iloc[i]["X"], arrow_points.iloc[i]["Y"])
+                turning_point_i = (arrow_points.iloc[i]["X"]-1, arrow_points.iloc[i]["Y"]-1)
                 turning_point_j = (
-                    arrow_points.iloc[i + 1]["X"],
-                    arrow_points.iloc[i + 1]["Y"],
+                    arrow_points.iloc[i + 1]["X"]-1,
+                    arrow_points.iloc[i + 1]["Y"]-1,
                 )
 
                 # Calculate the unit vector of the arrow segment
