@@ -439,10 +439,10 @@ class GridDesignerUI:
 
                     # Add line segment with arrowhead only for the last segment
                     fig.add_annotation(
-                        x=to_point["X"],
-                        y=to_point["Y"],
-                        ax=from_point["X"],
-                        ay=from_point["Y"],
+                        x=to_point["X"]+1,
+                        y=to_point["Y"]+1,
+                        ax=from_point["X"]+1,
+                        ay=from_point["Y"]+1,
                         xref="x",
                         yref="y",
                         axref="x",
@@ -516,7 +516,11 @@ class GridDesignerUI:
 
             submitted_button = streamlit.form_submit_button("Add desired directions")
             if submitted_button:
+                
                 desired_skycar_directions = desired_skycar_directions.dropna(how="all")
+                # Adjust coordinates by subtracting 1 from both X and Y
+                desired_skycar_directions["X"] = desired_skycar_directions["X"] - 1
+                desired_skycar_directions["Y"] = desired_skycar_directions["Y"] - 1
 
         # Validate if the directions are horizontal or vertical only
         for arrow_index, group in desired_skycar_directions.groupby("arrow_index"):
