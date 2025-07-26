@@ -1,12 +1,12 @@
 import math
 import re
+from pathlib import Path
 from typing import List
 
 import numpy
 import pandas
 import plotly.graph_objects as go
 import streamlit
-from pathlib import Path
 
 EXCEL_OPTIONS = [0, 1, 2, 3]
 MAX_SIZE = 50
@@ -15,16 +15,41 @@ MAX_SIZE = 50
 class GridDesignerUI:
     """
     The UI for grid designer.
+
+    Attributes
+    ----------
+    buffer_ratio : float
+        The buffer ratio of the grid, i.e. how many empty bins are there in the grid.
+        Note that empty bins are not the same as empty grid spaces. Value is between 0
+        and 1.
+    z_size : int
+        The height of the grid in number of bins.
+    grid_data : pandas.DataFrame
+        The grid data previously imported as an Excel file..
+    stations : List[str]
+        The stations string from the grid data. Example inputs are "P1I", "P2DI", "P3PO".
+    number_of_bins : int
+        The number of bins in the grid.
+    has_inbound : bool
+        True if the grid has inbound stations, False otherwise.
+    has_outbound : bool
+        True if the grid has outbound stations, False otherwise.
+    station_code_groups : List[List[int]]
+        The list of groups of station indices. A station group means that the stations
+        share the same order.
+    desired_skycar_directions : pandas.DataFrame
+        The desired skycar directions input to be processed as skycar direction
+        constraints.
     """
 
     def __init__(self):
-        self.buffer_ratio = None
-        self.z_size = None
-        self.grid_data = None
-        self.stations = None
-        self.number_of_bins = None
-        self.has_inbound = True
-        self.has_outbound = True
+        self.buffer_ratio: float = None
+        self.z_size: int = None
+        self.grid_data: pandas.DataFrame = None
+        self.stations: List[str] = None
+        self.number_of_bins: int = None
+        self.has_inbound: bool = True
+        self.has_outbound: bool = True
         self.station_code_groups = None
         self.desired_skycar_directions = None
 
@@ -59,21 +84,25 @@ class GridDesignerUI:
                 grid_excel_file, header=0, index_col=0, dtype=str
             )
 
-            # Drop first row and first column
+            # Drop first row and first column, following the template given
             grid_data = grid_data.dropna(how="all", axis=0)
             grid_data = grid_data.dropna(how="all", axis=1)
 
-            # Convert grid data to numeric, coercing non-numeric values to NaN, then get the
-            # maximum value, ignoring NaN
+            # Convert grid data to numeric, coercing non-numeric values to NaN, then get
+            # the maximum value, ignoring NaN
             numeric_grid = pandas.to_numeric(grid_data.values.ravel(), errors="coerce")
             self.z_size = int(numeric_grid[~numpy.isnan(numeric_grid)].max())
-
             self.grid_data = grid_data
 
+            # Check whether the stations are valid.
             is_success = self._check_station_validity()
             if not is_success:
                 return False
 
+            # Add lines to indicate desired skycar directions
+            self._get_desired_skycar_directions()
+
+            # Display the grid.
             self._display_grid()
 
             is_success = self._choose_linked_stations()
@@ -88,7 +117,6 @@ class GridDesignerUI:
             "Gross number of spaces expected",
             value=gross_number_of_spaces_expected,
         )
-
         if grid_excel_file is None:
             gross_number_of_spaces_from_grid = "N/A"
             delta_gross_number = None
@@ -159,6 +187,7 @@ class GridDesignerUI:
         template_path = files_dir / "template.xlsx"
         example_path = files_dir / "example.xlsx"
 
+        # Download template and example files.
         streamlit.download_button(
             "Download template",
             file_name="template.xlsx",
@@ -377,9 +406,6 @@ class GridDesignerUI:
             columns=grid_data_display.columns,
         )
 
-        # Add lines to indicate desired skycar directions
-        self._get_desired_skycar_directions()
-
         # Create a figure for the grid layout
         fig = go.Figure(
             data=go.Heatmap(
@@ -389,13 +415,7 @@ class GridDesignerUI:
                 colorscale=discrete_colourscale,
                 colorbar=dict(
                     tickvals=[0, 1, 2, 3, 4],
-                    ticktext=[
-                        "Free",
-                        "Stations",
-                        "Buffers",
-                        "Others",
-                        "Unavailable",
-                    ],
+                    ticktext=["Free", "Stations", "Buffers", "Others", "Unavailable"],
                     title="Legend",
                 ),
                 zmin=-0.5,
@@ -403,6 +423,7 @@ class GridDesignerUI:
             )
         )
 
+        # Add lines to indicate the grid.
         for col in range(grid_data_display.shape[1] + 1):
             fig.add_shape(
                 type="line",
@@ -425,7 +446,6 @@ class GridDesignerUI:
 
         # Add arrows to indicate the desired skycar directions
         if self.desired_skycar_directions is not None:
-            # Group by arrow_index to process each arrow separately
             for _, arrow_points in self.desired_skycar_directions.groupby(
                 "arrow_index"
             ):
@@ -481,6 +501,7 @@ class GridDesignerUI:
         """
         desired_skycar_directions = pandas.DataFrame(columns=["arrow_index", "X", "Y"])
 
+        # Create a form to get the desired skycar directions to prevent constant reloading
         with streamlit.form("desired_skycar_directions"):
             streamlit.write("#### Desired skycar directions")
             streamlit.write(
@@ -516,7 +537,6 @@ class GridDesignerUI:
 
             submitted_button = streamlit.form_submit_button("Add desired directions")
             if submitted_button:
-                
                 desired_skycar_directions = desired_skycar_directions.dropna(how="all")
 
         # Validate if the directions are horizontal or vertical only
@@ -554,7 +574,20 @@ class GridDesignerUI:
 
         self.desired_skycar_directions = desired_skycar_directions
 
-    def _choose_linked_stations(self):
+    def _choose_linked_stations(self) -> bool:
+        """
+        Choose which stations are linked to each other.
+
+        Returns
+        -------
+        bool
+            True if the linked stations are valid, False otherwise.
+        """
+        streamlit.write("#### Linked stations")
+        streamlit.write(
+            "Link two stations so they share an inbound/outbound order. Leave empty to skip."
+        )
+
         # Get the index of the stations from self.stations.
         station_indices = list(
             set(
@@ -563,11 +596,6 @@ class GridDesignerUI:
                     for station in self.stations
                 ]
             )
-        )
-
-        streamlit.write("#### Linked stations")
-        streamlit.write(
-            "Link two stations so they share an inbound/outbound order. Leave empty to skip."
         )
 
         linked_stations_df = pandas.DataFrame(
@@ -597,14 +625,15 @@ class GridDesignerUI:
         primary_station_indices = linked_stations_df["primary_station_index"].tolist()
         linked_station_indices = linked_stations_df["linked_station_index"].tolist()
 
+        # Check 1a and 1b: No duplicated station indices
         if len(primary_station_indices) != len(set(primary_station_indices)):
             streamlit.error("Duplicated primary station index detected.", icon="❌")
             return False
-
         if len(linked_station_indices) != len(set(linked_station_indices)):
             streamlit.error("Duplicated linked station index detected.", icon="❌")
             return False
 
+        # Check 2: No primary station index found in linked station index
         for i in primary_station_indices:
             if i in linked_station_indices:
                 streamlit.error(
@@ -622,7 +651,7 @@ class GridDesignerUI:
             station_type = match.group(3)
             station_types[station_index] = station_type
 
-        # Check if linked stations have the same type
+        # Check 3: Linked stations must have the same type
         for _, rows in linked_stations_df.iterrows():
             i = rows["primary_station_index"]
             j = rows["linked_station_index"]
@@ -635,7 +664,7 @@ class GridDesignerUI:
                 )
                 return False
 
-        # Remaining station indices
+        # Get remaining station indices
         remaining_station_indices = [
             i
             for i in station_indices

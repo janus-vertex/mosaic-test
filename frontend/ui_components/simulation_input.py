@@ -1,40 +1,95 @@
 import math
 
+import pandas
+import plotly.graph_objects as go
 import streamlit
-
 from core.pareto import ParetoCalculator
 from ui_components.grid_designer import GridDesignerUI
-import plotly.graph_objects as go
-import pandas
 
 
 class SimulationInputUI:
     """
     The UI for simulation input.
+
+    Attributes
+    ----------
+    simulation_name : str
+        The name of the simulation.
+    inbound_bins_per_order : int
+        The number of bins per order for inbound orders.
+    outbound_bins_per_order : int
+        The number of bins per order for outbound orders.
+    inbound_orders_per_hour : int
+        The number of inbound orders per hour.
+    outbound_orders_per_hour : int
+        The number of outbound orders per hour.
+    inbound_time : int
+        The handling time for inbound orders in seconds.
+    outbound_time : int
+        The handling time for outbound orders in seconds.
+    number_of_skycars : int
+        The number of skycars.
+    pareto_p : float
+        The Pareto p value in decimal.
+    pareto_q : float
+        The Pareto q value in decimal.
+    pareto_probabilities : List[float]
+        The probabilities of each layer in the grid in decimal.
+    duration_string : str
+        The duration string to indicate the operation time ranges. Example "N1800;AO1800".
+
+    Parameters
+    ----------
+    grid_designer_ui : GridDesignerUI
+        The UI for grid designer.
     """
 
     def __init__(self, grid_designer_ui: GridDesignerUI):
         self.grid_designer_ui = grid_designer_ui
 
-    def show(self):
-        streamlit.write("## Simulation Input")
+        self.simulation_name = None
+        self.inbound_bins_per_order = None
+        self.outbound_bins_per_order = None
+        self.inbound_orders_per_hour = None
+        self.outbound_orders_per_hour = None
+        self.inbound_time = None
+        self.outbound_time = None
+        self.number_of_skycars = None
+        self.pareto_p = None
+        self.pareto_q = None
+        self.pareto_probabilities = None
+        self.duration_string = None
 
-        streamlit.write("#### General settings")
+    def show(self) -> bool:
+        """
+        Show the simulation input UI.
+
+        Returns
+        -------
+        bool
+            True if the simulation inputs are valid, False otherwise.
+        """
+        streamlit.write("## Simulation Input")
         is_success = True
 
+        streamlit.write("#### General settings")
+
+        # Simulation name - only alphanumeric characters, dashes, and underscores
+        # allowed
         simulation_name = streamlit.text_input(
             "Simulation name (default name is given if left blank)", value="default-sim"
         )
-        # Validate simulation name - only alphanumeric characters, dashes, and underscores allowed
         if simulation_name == "" or not all(
             c.isalnum() or c in ["-", "_"] for c in simulation_name
         ):
             streamlit.error(
-                "Simulation name must contain only alphanumeric characters, dashes, or underscores.",
+                "Simulation name must contain only alphanumeric characters, dashes, "
+                + "or underscores.",
                 icon="❌",
             )
             is_success = False
 
+        # Simulation duration. Choose between advance order and normal operations.
         streamlit.text(
             "Simulation duration (add more rows to include different operation types)"
         )
@@ -72,6 +127,8 @@ class SimulationInputUI:
 
         streamlit.write("#### Peak number of bins per order")
         col1, col2 = streamlit.columns(2)
+
+        # Inbound bins per order
         inbound_bins_per_order = col1.number_input(
             "Inbound bins per order",
             min_value=1 if self.grid_designer_ui.has_inbound else 0,
@@ -79,6 +136,8 @@ class SimulationInputUI:
             max_value=5000,
             disabled=False if self.grid_designer_ui.has_inbound else True,
         )
+
+        # Outbound bins per order
         outbound_bins_per_order = col2.number_input(
             "Outbound bins per order",
             min_value=1 if self.grid_designer_ui.has_outbound else 0,
@@ -89,6 +148,8 @@ class SimulationInputUI:
 
         streamlit.write("#### Peak number of orders per hour")
         col1, col2 = streamlit.columns(2)
+
+        # Inbound orders per hour
         inbound_orders_per_hour = col1.number_input(
             "Inbound orders per hour",
             min_value=1 if self.grid_designer_ui.has_inbound else 0,
@@ -96,6 +157,8 @@ class SimulationInputUI:
             max_value=1000,
             disabled=False if self.grid_designer_ui.has_inbound else True,
         )
+
+        # Outbound orders per hour
         outbound_orders_per_hour = col2.number_input(
             "Outbound orders per hour",
             min_value=1 if self.grid_designer_ui.has_outbound else 0,
@@ -104,18 +167,22 @@ class SimulationInputUI:
             disabled=False if self.grid_designer_ui.has_outbound else True,
         )
 
-        inbound_throughput = inbound_orders_per_hour * inbound_bins_per_order
-        outbound_throughput = outbound_orders_per_hour * outbound_bins_per_order
-        recommended_number_of_skycars = self._recommend_number_of_skycars(
-            total_throughput=inbound_throughput + outbound_throughput
-        )
         streamlit.write("#### Number of skycars")
         col1, col2 = streamlit.columns(2)
+
+        # Number of skycars
         number_of_skycars = col1.number_input(
             "Number of skycars",
             min_value=1,
             max_value=100,
             value=10,
+        )
+
+        # Calculate throughput to recommend number of skycars
+        inbound_throughput = inbound_orders_per_hour * inbound_bins_per_order
+        outbound_throughput = outbound_orders_per_hour * outbound_bins_per_order
+        recommended_number_of_skycars = self._recommend_number_of_skycars(
+            total_throughput=inbound_throughput + outbound_throughput
         )
         col2.metric(
             "✅ Recommended number of skycars",
@@ -125,12 +192,16 @@ class SimulationInputUI:
 
         streamlit.write("#### Operator handling times")
         col1, col2 = streamlit.columns(2)
+
+        # Inbound handling time
         inbound_time = col1.number_input(
             "Inbound handling time (s)",
             min_value=1,
             value=20,
             disabled=False if self.grid_designer_ui.has_inbound else True,
         )
+
+        # Outbound handling time
         outbound_time = col2.number_input(
             "Outbound handling time (s)",
             min_value=1,
@@ -155,6 +226,8 @@ class SimulationInputUI:
                 """
             )
 
+        # Pareto p and q for bin distribution. Input is in percentage, then convert to
+        # decimal
         col1, col2 = streamlit.columns(2)
         pareto_p = (
             col1.number_input("p (%)", min_value=0, max_value=100, value=80) / 100
@@ -162,7 +235,6 @@ class SimulationInputUI:
         pareto_q = (
             col2.number_input("q (%)", min_value=0, max_value=100, value=20) / 100
         )
-
         self._show_bin_distribution_plot(pareto_p, pareto_q)
 
         # Assign values for later use
@@ -181,31 +253,57 @@ class SimulationInputUI:
 
         return is_success
 
-    def _recommend_number_of_skycars(self, total_throughput: int):
+    def _recommend_number_of_skycars(
+        self, total_throughput: int, bins_per_skycar: int = 25
+    ):
         """
-        Recommend the number of skycars based on the inbound and outbound throughputs. One
-        robot can roughly handle 25 bins per hour.
+        Recommend the number of skycars based on the inbound and outbound throughputs.
+        One robot can roughly handle 25 bins per hour.
+
+        Parameters
+        ----------
+        total_throughput : int
+            The total throughput of the inbound and outbound orders.
+        bins_per_skycar : int, optional
+            The number of bins that one skycar can handle per hour, by default 25.
         """
-        return math.ceil(total_throughput / 25)
+        return math.ceil(total_throughput / bins_per_skycar)
 
     def _show_bin_distribution_plot(self, pareto_p: float, pareto_q: float):
+        """
+        Display the bin distribution plot.
+
+        Parameters
+        ----------
+        pareto_p : float
+            The Pareto p value in decimal.
+        pareto_q : float
+            The Pareto q value in decimal.
+        """
         z_size = self.grid_designer_ui.z_size
+
+        # If the z_size is not set (meaning no grid is uploaded), do not display the plot
         if z_size is None:
             return
 
-        pareto = ParetoCalculator(min_x=1, max_x=z_size)
+        # Get the cut-off point (x0) and Pareto index (alpha)
+        pareto = ParetoCalculator(min_layer=1, max_layer=z_size)
         x0, alpha = pareto.get_alpha(p=pareto_p, q=pareto_q)
 
+        # Calculate the probabilities of each layer in percentage
         probabilities_percent = [
             pareto.probability_of_layer(layer=layer, alpha=alpha) * 100
             for layer in range(1, z_size + 1)
         ]
+
+        # Get the probability sum of the top x0 layers
         top_x0_sum = sum(probabilities_percent[: int(x0)])
         streamlit.info(
             f"{top_x0_sum:.1f}% of the bins go into the top {int(x0)} "
             + f"({x0/z_size*100:.1f}%) layer(s).",
         )
 
+        # Display the bar plot
         fig = go.Figure(
             data=go.Bar(
                 x=list(range(1, z_size + 1)),
@@ -214,7 +312,6 @@ class SimulationInputUI:
                 textposition="outside",
             )
         )
-
         fig.update_layout(
             title="Bin Distribution by Position of Layer",
             xaxis_title="Position of Layer",
@@ -222,7 +319,7 @@ class SimulationInputUI:
             showlegend=False,
         )
 
-        # Calculate sum of top int(x0) probabilities_percent
+        # Add indication to the top x0 layers
         fig.update_traces(
             marker_pattern_shape=["\\"] * int(x0) + [""] * (z_size - int(x0)),
             marker_pattern_solidity=0.8,
@@ -230,17 +327,27 @@ class SimulationInputUI:
 
         streamlit.plotly_chart(fig)
 
+        # Store the probabilities in decimals for later use
         self.pareto_probabilities = [i / 100 for i in probabilities_percent]
 
     def _display_durations(self, durations: pandas.DataFrame):
+        """
+        Display line plot that shows advance order and normal operation ranges.
 
+        Parameters
+        ----------
+        durations : pandas.DataFrame
+            The duration input table.
+        """
+        # If no duration is provided, do not display the plot.
         if durations.empty:
             return
 
         fig = go.Figure()
-
         max_time = durations["duration_in_minutes"].sum()
-        # Add base line for full duration
+
+        # Add base line for the whole simulation. Assume first the whole simulation
+        # is normal operation.
         fig.add_trace(
             go.Scatter(
                 x=[0, max_time],
@@ -250,12 +357,11 @@ class SimulationInputUI:
                 name="Normal",
             )
         )
-        # Add red segments for each advance order
+        # Add red segments for each advance order operations
         for i in range(len(durations)):
             if durations.iloc[i]["type"] == "Advance Order":
                 start = durations.iloc[:i]["duration_in_minutes"].sum()
                 end = durations.iloc[: i + 1]["duration_in_minutes"].sum()
-
                 fig.add_trace(
                     go.Scatter(
                         x=[start, end],
@@ -310,6 +416,14 @@ class SimulationInputUI:
         streamlit.plotly_chart(fig)
 
     def _store_durations(self, durations: pandas.DataFrame):
+        """
+        Store the duration string to save in the simulation file.
+
+        Parameters
+        ----------
+        durations : pandas.DataFrame
+            The duration input table.
+        """
         operation_ranges = []
         current_type = None
         current_duration = 0
@@ -317,13 +431,19 @@ class SimulationInputUI:
             duration = row["duration_in_minutes"]
             op_type = row["type"]
 
+            # If the current operation is not set, set the current operation and
+            # duration
             if current_type is None:
                 current_type = op_type
                 current_duration = duration
+
+            # If subsequent rows have the same operation type, add the duration.
             elif current_type == op_type:
                 current_duration += duration
+
+            # If the current operation is not the same as previous one, append
+            # current operation and start a new operation.
             else:
-                # Convert minutes to seconds and create range string
                 prefix = "AO" if current_type == "Advance Order" else "N"
                 operation_ranges.append(f"{prefix}{int(current_duration * 60)}")
                 current_type = op_type
