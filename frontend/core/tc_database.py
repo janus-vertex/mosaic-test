@@ -77,23 +77,26 @@ class MongoService:
             )
 
             df = pandas.DataFrame(result)
-            df["human_completed_at"] = pandas.to_datetime(
-                df["completed_at"], unit="s", utc=True
-            )
+            # df["human_completed_at"] = pandas.to_datetime(
+            #     df["completed_at"], unit="s", utc=True
+            # )
             return df
 
         except Exception as e:
             raise Exception(f"Error connecting to MongoDB: {e}")
 
     def get_movement_data(
-        self, start_timestamp: float, end_timestamp: float
+        self,
+        start_timestamp: float,
+        end_timestamp: float,
+        save_filename: str = None,
+        is_for_movement_visualisation: bool = False,
     ) -> pandas.DataFrame:
         df = self.get_skycar_messages(
             start_timestamp=start_timestamp, end_timestamp=end_timestamp
         )
 
         # Group by skycar_id and split the message into a list of strings
-        grouped = df.groupby("skycar_id")
         split = df["message"].str.split(",")
 
         # There are two kinds of entries: main (prefixed with 'LOG') and child (prefixed
@@ -111,15 +114,38 @@ class MongoService:
         # - index 7: axis (x, y).
         # - index 8: x coordinate to go.
         # - index 9: y coordinate to go.
-        df.loc[main_mask, "x"] = split.loc[main_mask].str[8].astype(int)
-        df.loc[main_mask, "y"] = split.loc[main_mask].str[9].astype(int)
-        df.loc[main_mask, "action"] = "LOG" + split.loc[main_mask].str[6]
+        if is_for_movement_visualisation:
+            df = df.loc[~main_mask, :]
+        else:
+            df.loc[main_mask, "x"] = split.loc[main_mask].str[8].astype(int)
+            df.loc[main_mask, "y"] = split.loc[main_mask].str[9].astype(int)
+            df.loc[main_mask, "action"] = "LOG" + split.loc[main_mask].str[6]
 
         # For child entries, we extract the action and the coordinates to go.
         # An example child entry is "SC,1,I,S1-19623ee8d780000-1,B,y,18,13,0,,100"
         df.loc[~main_mask, "action"] = split.loc[~main_mask].str[4]
         df.loc[~main_mask, "x"] = split.loc[~main_mask].str[6].astype(int)
         df.loc[~main_mask, "y"] = split.loc[~main_mask].str[7].astype(int)
+
+        # Sort each group by "completed_at" timestamp more efficiently
+        if is_for_movement_visualisation:
+            # Sort by skycar_id and completed_at, then create begin_at column
+            df = df.sort_values(by=["skycar_id", "completed_at"])
+
+            # Use transform with shift to create begin_at column efficiently
+            df["begin_at"] = df.groupby("skycar_id")["completed_at"].shift(1)
+            df["prev_x"] = df.groupby("skycar_id")["x"].shift(1)
+            df["prev_y"] = df.groupby("skycar_id")["y"].shift(1)
+
+            # For the first row of each group, set begin_at equal to completed_at
+            df.loc[df["begin_at"].isna(), "begin_at"] = df.loc[
+                df["begin_at"].isna(), "completed_at"
+            ]
+            df.loc[df["prev_x"].isna(), "prev_x"] = df.loc[df["prev_x"].isna(), "x"]
+            df.loc[df["prev_y"].isna(), "prev_y"] = df.loc[df["prev_y"].isna(), "y"]
+
+        if save_filename is not None and isinstance(save_filename, str):
+            df.to_csv(save_filename, index=False)
 
         return df
 
@@ -130,14 +156,6 @@ class MongoService:
         try:
             if hasattr(self, "client") and self.client:
                 self.client.close()
-                print("MongoDB connection closed successfully.")
+
         except Exception as e:
             print(f"Error closing MongoDB connection: {e}")
-
-
-if __name__ == "__main__":
-    mongo_service = MongoService()
-    df = mongo_service.get_movement_data(
-        datetime(2025, 4, 11, 16, 0, 0), datetime(2025, 4, 11, 17, 0, 0)
-    )
-    print(df)

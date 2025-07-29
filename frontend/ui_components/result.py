@@ -123,6 +123,8 @@ class ResultUI:
                 self.movement_data = mongo_service.get_movement_data(
                     start_timestamp=self.logs["timestamp"].min(),
                     end_timestamp=self.logs["timestamp"].max(),
+                    save_filename=f"test_movement_no_log_processed.csv",
+                    is_for_movement_visualisation=True,
                 )
 
                 # Cache the data in session state
