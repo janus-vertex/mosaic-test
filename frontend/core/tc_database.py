@@ -96,6 +96,9 @@ class MongoService:
             start_timestamp=start_timestamp, end_timestamp=end_timestamp
         )
 
+        # Convert skycar_id to integer
+        df['skycar_id'] = df['skycar_id'].astype(int)
+
         # Group by skycar_id and split the message into a list of strings
         split = df["message"].str.split(",")
 

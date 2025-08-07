@@ -435,7 +435,7 @@ class Animation:
             blit=True,
         )
         if save_filename != "":
-            anim.save(f"{save_filename}.mp4", writer="ffmpeg")
+            anim.save(f"{save_filename}", writer="ffmpeg")
 
 
 

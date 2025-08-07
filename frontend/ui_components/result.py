@@ -275,10 +275,11 @@ class ResultUI:
                         animation_data = file.read()
 
                     streamlit.download_button(
-                        label="📥 Download Animation",
+                        label="Download Animation",
                         data=animation_data,
                         file_name=filename,
                         mime="video/mp4",
+                        type="primary",
                     )
 
                     # Clean up the temporary file after reading
