@@ -1,9 +1,11 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 
 import pandas
 import plotly.graph_objects as go
 import streamlit
+from core.animation import Animation
 from core.simulation_database import SimulationDatabase
 from core.tc_database import MongoService
 
@@ -123,7 +125,6 @@ class ResultUI:
                 self.movement_data = mongo_service.get_movement_data(
                     start_timestamp=self.logs["timestamp"].min(),
                     end_timestamp=self.logs["timestamp"].max(),
-                    save_filename=f"test_movement_no_log_processed.csv",
                     is_for_movement_visualisation=True,
                 )
 
@@ -187,6 +188,8 @@ class ResultUI:
 
             progress_bar.progress(100)
 
+            self._show_skycar_visualisation()
+
         # Clean up connections
         finally:
             if simulation_database is not None:
@@ -194,6 +197,107 @@ class ResultUI:
 
             if mongo_service is not None:
                 mongo_service.close_connection()
+
+    def _show_skycar_visualisation(self):
+        streamlit.write("#### Skycar visualisation")
+        streamlit.write(
+            "Upload the original grid excel file, then choose the period of time (in "
+            + "simulation minutes) to animate. "
+        )
+        streamlit.write(
+            "The animation is sped up by 10x. In other words, 1 minute of animation is "
+            + "equivalent to 10 minutes of simulation. 1 minute of animation video "
+            + "generally takes about 1 minute to render."
+        )
+
+        grid_excel_file = streamlit.file_uploader(
+            "Upload grid excel.", key="grid_for_visualisation"
+        )
+        if grid_excel_file is None:
+            streamlit.info(
+                "Upload the original grid excel to visualise the skycar movements. "
+                + "Note that there is no validation here at the moment.",
+            )
+            grid_data = None
+            is_animate = False
+
+        else:
+            grid_data = pandas.read_excel(
+                grid_excel_file, header=0, index_col=0, dtype=str
+            )
+
+            # Drop first row and first column, following the template given
+            grid_data = grid_data.dropna(how="all", axis=0)
+            grid_data = grid_data.dropna(how="all", axis=1)
+
+            col1, col2 = streamlit.columns(2)
+            from_time = col1.number_input(
+                "From which simulation minute",
+                value=0,
+                min_value=0,
+                max_value=1000000,
+                step=1,
+            )
+            to_time = col2.number_input(
+                "To which simulation minute",
+                value=10,
+                min_value=0,
+                max_value=1000000,
+                step=1,
+            )
+
+            if from_time >= to_time:
+                streamlit.error("From time must be less than to time.", icon="❌")
+                return
+
+            is_animate = streamlit.button("Animate", type="primary")
+
+        if is_animate:
+            streamlit.info(
+                "Please wait for the animation to render (estimated time of waiting: "
+                + f"{int((to_time-from_time)/10)+1} min)"
+            )
+
+            animation = Animation(grid_data=grid_data, movement_data=self.movement_data)
+
+            try:
+                # Ensure animation directory exists (important for cloud deployment)
+                animation_dir = "animation"
+                if not os.path.exists(animation_dir):
+                    os.makedirs(animation_dir, exist_ok=True)
+
+                # Try to save animation and handle potential errors
+                filename = "animation/skycar_anim.mp4"
+                animation.animate(save_filename=filename)
+
+                if os.path.exists(filename):
+                    with open(filename, "rb") as file:
+                        animation_data = file.read()
+
+                    streamlit.download_button(
+                        label="📥 Download Animation",
+                        data=animation_data,
+                        file_name=filename,
+                        mime="video/mp4",
+                    )
+
+                    # Clean up the temporary file after reading
+                    try:
+                        os.remove(filename)
+                    except Exception as e:
+                        streamlit.warning(f"Could not clean up temporary file: {e}")
+
+                    streamlit.success("Animation generated and ready for download!")
+                else:
+                    streamlit.error(
+                        "Animation file was not created. This might be due to missing dependencies or permissions."
+                    )
+
+            except Exception as e:
+                streamlit.error(f"Failed to generate animation: {str(e)}")
+                streamlit.info(
+                    "This might be due to missing FFmpeg or file system permissions in the deployment environment."
+                )
 
     def _parse_advance_order_ranges_from_string(
         self, duration_string: str, simulation_start_timestamp: float

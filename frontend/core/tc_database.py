@@ -114,12 +114,12 @@ class MongoService:
         # - index 7: axis (x, y).
         # - index 8: x coordinate to go.
         # - index 9: y coordinate to go.
-        if is_for_movement_visualisation:
-            df = df.loc[~main_mask, :]
-        else:
-            df.loc[main_mask, "x"] = split.loc[main_mask].str[8].astype(int)
-            df.loc[main_mask, "y"] = split.loc[main_mask].str[9].astype(int)
-            df.loc[main_mask, "action"] = "LOG" + split.loc[main_mask].str[6]
+        # if is_for_movement_visualisation:
+        #     df = df.loc[~main_mask, :]
+        # else:
+        df.loc[main_mask, "x"] = split.loc[main_mask].str[8].astype(int)
+        df.loc[main_mask, "y"] = split.loc[main_mask].str[9].astype(int)
+        df.loc[main_mask, "action"] = "LOG" + split.loc[main_mask].str[6]
 
         # For child entries, we extract the action and the coordinates to go.
         # An example child entry is "SC,1,I,S1-19623ee8d780000-1,B,y,18,13,0,,100"
@@ -131,18 +131,47 @@ class MongoService:
         if is_for_movement_visualisation:
             # Sort by skycar_id and completed_at, then create begin_at column
             df = df.sort_values(by=["skycar_id", "completed_at"])
+            simulation_start_timestamp = df["completed_at"].min()
 
-            # Use transform with shift to create begin_at column efficiently
+            # For the time of beginning of an entry, we just take the shift of the whole
+            # dataset because LOG entries are the time when the instruction is received
             df["begin_at"] = df.groupby("skycar_id")["completed_at"].shift(1)
-            df["prev_x"] = df.groupby("skycar_id")["x"].shift(1)
-            df["prev_y"] = df.groupby("skycar_id")["y"].shift(1)
+            df.loc[df["begin_at"].isna(), "begin_at"] = simulation_start_timestamp - 1
 
-            # For the first row of each group, set begin_at equal to completed_at
-            df.loc[df["begin_at"].isna(), "begin_at"] = df.loc[
-                df["begin_at"].isna(), "completed_at"
+            # For previous coordinates, we need to separate the main entries and the
+            # child entries
+            df.loc[~main_mask, "prev_x"] = (
+                df.loc[~main_mask].groupby("skycar_id")["x"].shift(1)
+            )
+            df.loc[~main_mask, "prev_y"] = (
+                df.loc[~main_mask].groupby("skycar_id")["y"].shift(1)
+            )
+
+            df.loc[main_mask, "prev_x"] = (
+                df.loc[main_mask].groupby("skycar_id")["x"].shift(1)
+            )
+            df.loc[main_mask, "prev_y"] = (
+                df.loc[main_mask].groupby("skycar_id")["y"].shift(1)
+            ) 
+
+            # Also for previous coordinates, the first entry is the same as the current
+            # 4 coordinates
+            df.loc[(~main_mask) & df["prev_x"].isna(), "prev_x"] = df.loc[
+                (~main_mask) & df["prev_x"].isna(), "x"
             ]
-            df.loc[df["prev_x"].isna(), "prev_x"] = df.loc[df["prev_x"].isna(), "x"]
-            df.loc[df["prev_y"].isna(), "prev_y"] = df.loc[df["prev_y"].isna(), "y"]
+            df.loc[(~main_mask) & df["prev_y"].isna(), "prev_y"] = df.loc[
+                (~main_mask) & df["prev_y"].isna(), "y"
+            ]
+
+            df.loc[main_mask & df["prev_x"].isna(), "prev_x"] = df.loc[
+                main_mask & df["prev_x"].isna(), "x"
+            ]
+            df.loc[main_mask & df["prev_y"].isna(), "prev_y"] = df.loc[
+                (main_mask) & df["prev_y"].isna(), "y"
+            ]
+
+        # Drop the message column
+        df = df.drop(columns=["message"])
 
         if save_filename is not None and isinstance(save_filename, str):
             df.to_csv(save_filename, index=False)
